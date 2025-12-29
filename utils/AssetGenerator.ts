@@ -4,6 +4,10 @@ export type AssetType =
   | 'tree' | 'bush' | 'bench' | 'lamppost' | 'trashcan' | 'fountain'
   | 'ice_cream_cart' | 'balloon_stand' | 'picnic_blanket' | 'picnic_basket'
   | 'pullup_bar' | 'fresh_grave' | 'casket_open' | 'shovel_ground'
+  | 'ice_cream_stain' | 'chalk_mark' | 'mud_patch'
+  | 'blood_gun' | 'blood_knife' 
+  | 'pile_trash' | 'pile_leaves'
+  | 'clue_paint' | 'clue_wrapper' | 'clue_shears' | 'clue_shaker' | 'clue_pick' | 'clue_ticket'
   | string; 
 
 // --- COLOR PALETTES ---
@@ -241,6 +245,56 @@ const painters = {
     }
 };
 
+// NEW FORENSIC PAINTERS
+const forensicPainters = {
+    // COVER OBJECTS
+    pile_trash: (g: Graphics) => {
+        // A messy heap of urban debris
+        drawPixelCircle(g, 0x424242, 16, 16, 14); // Base shadow
+        drawPixelRect(g, 0xE0E0E0, 10, 10, 6, 8); // Paper
+        drawPixelRect(g, 0x212121, 18, 14, 8, 8); // Bag
+        drawPixelRect(g, 0x795548, 14, 20, 6, 6); // Box
+        drawPixelRect(g, 0xFFFFFF, 20, 8, 2, 2); // Glint
+    },
+    pile_leaves: (g: Graphics) => {
+        // Organic heap
+        drawPixelCircle(g, 0x3E2723, 16, 16, 14);
+        drawPixelRect(g, 0xD84315, 8, 12, 6, 4); // Orange leaf
+        drawPixelRect(g, 0x5D4037, 18, 10, 6, 6); // Brown leaf
+        drawPixelRect(g, 0x2E7D32, 14, 20, 4, 4); // Green leaf
+        drawPixelRect(g, 0xD84315, 22, 16, 4, 6);
+    },
+
+    // CLUES (Tiny items hidden under piles)
+    clue_paint: (g: Graphics) => { // Artist
+        drawPixelRect(g, 0xE0E0E0, 12, 12, 8, 4); // Tube body
+        drawPixelRect(g, 0x212121, 20, 13, 2, 2); // Cap
+        drawPixelRect(g, 0xF44336, 10, 12, 2, 2); // Red paint smear
+    },
+    clue_wrapper: (g: Graphics) => { // Glutton
+        drawPixelRect(g, 0xFFEB3B, 10, 10, 12, 8); // Wrapper
+        drawPixelRect(g, 0xB71C1C, 12, 12, 4, 4); // Logo
+    },
+    clue_shears: (g: Graphics) => { // Gardener
+        drawPixelRect(g, 0x9E9E9E, 10, 10, 12, 2); // Blade
+        drawPixelRect(g, 0x3E2723, 10, 12, 4, 4); // Handle
+    },
+    clue_shaker: (g: Graphics) => { // Bodybuilder
+        drawPixelRect(g, 0x90A4AE, 12, 8, 6, 14); // Bottle
+        drawPixelRect(g, 0x263238, 12, 6, 6, 2); // Lid
+    },
+    clue_pick: (g: Graphics) => { // Guitarist/Punk
+        // Triangle shape
+        g.beginFill(0xD81B60);
+        g.moveTo(16, 20); g.lineTo(10, 10); g.lineTo(22, 10);
+        g.endFill();
+    },
+    clue_ticket: (g: Graphics) => { // Commuter/Tourist
+        drawPixelRect(g, 0xFFFFFF, 10, 12, 14, 6);
+        drawPixelRect(g, 0x000000, 12, 14, 10, 1); // Barcode
+    }
+};    
+
 export const generateGameTextures = (app: Application): Record<string, Texture> => {
   const textures: Record<string, Texture> = {};
 
@@ -268,11 +322,59 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
   generate('fresh_grave', (g) => { drawPixelRect(g, 0x3E2723, 0, 0, 40, 20); drawPixelRect(g, 0x5D4037, -5, -5, 10, 10); drawPixelRect(g, 0x5D4037, 35, 15, 12, 8); });
   generate('casket_open', (g) => { drawPixelRect(g, 0x4E342E, 0, 0, 20, 48); drawPixelRect(g, 0x3E2723, 2, 2, 16, 44); drawPixelRect(g, 0xFFCCBC, 6, 6, 8, 8); drawPixelRect(g, 0xE0E0E0, 4, 14, 12, 30); });
   generate('shovel_ground', (g) => { drawPixelRect(g, 0x9E9E9E, 4, 0, 4, 8); drawPixelRect(g, 0x8D6E63, 5, -16, 2, 16); drawPixelRect(g, 0x8D6E63, 3, -18, 6, 2); });
-  generate('blood_stain', (g) => { drawPixelRect(g, 0x880000, 10, 10, 12, 8); drawPixelRect(g, 0x880000, 14, 8, 4, 12); });
+  // -- NEW DYNAMIC BLOOD -- //
+  generate('blood_gun', (g) => {
+      // Main impact
+      drawPixelCircle(g, 0x880000, 16, 16, 6);
+      // Satellites
+      for(let i=0; i<12; i++) {
+          const x = 16 + (Math.random() * 24 - 12);
+          const y = 16 + (Math.random() * 24 - 12);
+          drawPixelRect(g, 0x880000, x, y, 2, 2, 0.8);
+      }
+  });
+    // 2. KNIFE: Arterial Spurts (Directional pools)
+  generate('blood_knife', (g) => {
+      // Large pooling
+      drawPixelCircle(g, 0x880000, 16, 16, 10);
+      drawPixelCircle(g, 0x660000, 14, 14, 8); // Darker center
+      // Drag/Spurt line
+      drawPixelRect(g, 0x880000, 20, 14, 8, 4);
+      drawPixelRect(g, 0x880000, 26, 16, 4, 3);
+  });
+
   generate('footprints', (g) => { drawPixelRect(g, 0x880000, 10, 10, 4, 8, 0.7); drawPixelRect(g, 0x880000, 18, 20, 4, 8, 0.5); });
   generate('dropped_phone', (g) => { drawPixelRect(g, 0x212121, 12, 12, 6, 10); drawPixelRect(g, 0x00E676, 13, 13, 4, 6); });
   generate('doll', (g) => { drawPixelRect(g, 0xFFCCBC, 8, 4, 8, 8); drawPixelRect(g, 0xF48FB1, 6, 12, 12, 14); });
 
+  // --- NEW: CONCEALMENT & CLUES ---
+  generate('pile_trash', forensicPainters.pile_trash);
+  generate('pile_leaves', forensicPainters.pile_leaves);
+  
+  generate('clue_paint', forensicPainters.clue_paint);
+  generate('clue_wrapper', forensicPainters.clue_wrapper);
+  generate('clue_shears', forensicPainters.clue_shears);
+  generate('clue_shaker', forensicPainters.clue_shaker);
+  generate('clue_pick', forensicPainters.clue_pick);
+  generate('clue_ticket', forensicPainters.clue_ticket);
+  
+  // --- NEW DECALS (v1.5.1) ---
+  generate('ice_cream_stain', (g) => { 
+      drawPixelCircle(g, 0xF8BBD0, 16, 16, 8); // Puddle
+      drawPixelRect(g, 0xFFFFFF, 12, 12, 2, 2); // Glint
+      drawPixelRect(g, 0xD7CCC8, 18, 18, 4, 4); // Cone bits
+  });
+  generate('chalk_mark', (g) => { 
+      // Low alpha white scuffs (Gym Chalk)
+      drawPixelRect(g, 0xFFFFFF, 10, 10, 8, 2, 0.4);
+      drawPixelRect(g, 0xFFFFFF, 14, 8, 2, 8, 0.4);
+      drawPixelRect(g, 0xFFFFFF, 20, 20, 4, 4, 0.3);
+  });
+  generate('mud_patch', (g) => { 
+      drawPixelCircle(g, 0x5D4037, 14, 14, 8);
+      drawPixelCircle(g, 0x4E342E, 20, 18, 6);
+      drawPixelRect(g, 0x3E2723, 12, 12, 4, 4);
+  });
 
   // --- CHARACTER LOOP (Including ALL New Types) ---
   const archetypes = [

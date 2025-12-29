@@ -1,91 +1,109 @@
 // utils/SoundSynth.ts
 
-const AudioContextClass = (typeof window !== 'undefined') 
-  ? (window.AudioContext || (window as any).webkitAudioContext) 
-  : null;
-
 let audioCtx: AudioContext | null = null;
+let masterGain: GainNode | null = null;
 
-// Initialize Context (Must be triggered by user interaction first)
 export const initAudio = () => {
-  if (!audioCtx && AudioContextClass) {
-    audioCtx = new AudioContextClass();
-  }
-  if (audioCtx?.state === 'suspended') {
-    audioCtx.resume();
-  }
-  return audioCtx;
+    if (!audioCtx) {
+        // Fallback for Safari/Webkit
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.3; // Global Volume
+            masterGain.connect(audioCtx.destination);
+        }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+};
+
+const createOscillator = (freq: number, type: OscillatorType, duration: number, startTime: number = 0) => {
+    if (!audioCtx || !masterGain) return;
+    
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime);
+    
+    // Envelope to avoid popping
+    gain.gain.setValueAtTime(0, audioCtx.currentTime + startTime);
+    gain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + startTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTime + duration);
+    
+    osc.connect(gain);
+    gain.connect(masterGain);
+    
+    osc.start(audioCtx.currentTime + startTime);
+    osc.stop(audioCtx.currentTime + startTime + duration + 0.1);
 };
 
 export const SoundSynth = {
-  // 1. The Heartbeat (Low Thud)
-  playHeartbeat: (intensity = 1) => {
-    const ctx = initAudio();
-    if (!ctx) return;
+    playClick: () => {
+        if (!audioCtx) return;
+        // High pitch "mech" click
+        createOscillator(1200, 'square', 0.05);
+        createOscillator(800, 'sawtooth', 0.02);
+    },
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    // Low frequency thud (50Hz dropping to 0)
-    osc.frequency.setValueAtTime(60 * intensity, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(10, ctx.currentTime + 0.1);
-    
-    // Envelope (Short attack, decay)
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    playReveal: () => {
+        if (!audioCtx) return;
+        // Mystery Chord (Diminished)
+        createOscillator(440, 'sine', 0.5, 0);
+        createOscillator(523.25, 'sine', 0.5, 0.1); // C5
+        createOscillator(622.25, 'sine', 0.5, 0.2); // Eb5
+    },
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + 0.2);
-  },
+    playHeartbeat: (pitch = 1.0) => {
+        if (!audioCtx) return;
+        // Low thud
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.setValueAtTime(60 * pitch, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+        
+        gain.gain.setValueAtTime(1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        
+        osc.connect(gain);
+        gain.connect(masterGain!);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+    },
 
-  // 2. The Scream (High Pitch Noise + Distortion)
-  playScream: () => {
-    const ctx = initAudio();
-    if (!ctx) return;
+    playError: () => {
+        if (!audioCtx) return;
+        // Low Buzz
+        createOscillator(150, 'sawtooth', 0.2);
+        createOscillator(145, 'sawtooth', 0.2); // Beating effect
+    },
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    // Sawtooth for harshness
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(400, ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.1); // Scream up
-    osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.4); // Die down
+    playWin: () => {
+        if (!audioCtx) return;
+        // Victory Arpeggio
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+            createOscillator(freq, 'square', 0.4, i * 0.1);
+        });
+    },
 
-    // Loud!
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start();
-    osc.stop(ctx.currentTime + 0.6);
-  },
-
-  // 3. Success Chime (Retro)
-  playWin: () => {
-    const ctx = initAudio();
-    if (!ctx) return;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(440, ctx.currentTime); // A4
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
-
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start();
-    osc.stop(ctx.currentTime + 0.4);
-  }
+    playScream: () => {
+        if (!audioCtx) return;
+        // Noise buffer simulation via erratic frequency modulation
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.5);
+        
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+        
+        osc.connect(gain);
+        gain.connect(masterGain!);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
+    }
 };

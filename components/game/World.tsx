@@ -6,6 +6,7 @@ import { Texture, Container as PixiContainer, Sprite as PixiSprite } from 'pixi.
 import { generateGameTextures, AssetType } from '@/utils/AssetGenerator';
 import { rng } from '@/utils/rng';
 import { useGameStore } from '@/store/gameStore';
+import { SoundSynth } from '@/utils/SoundSynth';
 
 type EntityType = AssetType;
 
@@ -34,45 +35,105 @@ const PLAZA_CENTER_Y = 300;
 const PLAZA_RADIUS = 120;
 const FOUNTAIN_RADIUS = 40;
 
-// --- NEW: SCENARIO EXCLUSION ZONES ---
-// We define circles around our key props so trees don't spawn there.
 const SCENARIO_ZONES = [
-    { x: 115, y: 100, r: 80 },  // Q1: Ice Cream Area
-    { x: 640, y: 140, r: 100 }, // Q2: Picnic Area (Covers both blankets)
-    { x: 130, y: 450, r: 80 },  // Q3: Gym Area
-    { x: 600, y: 480, r: 90 },  // Q4: Crime Scene
+    { x: 115, y: 100, r: 80 },  // Q1
+    { x: 640, y: 140, r: 100 }, // Q2
+    { x: 130, y: 450, r: 80 },  // Q3
+    { x: 600, y: 480, r: 90 },  // Q4 (Crime)
 ];
+
+
+
+// --- HELPER: Map Archetype to Clue ---
+const getClueForArchetype = (archetype: string): AssetType => {
+    if (archetype.includes('artist')) return 'clue_paint';
+    if (archetype.includes('glutton')) return 'clue_wrapper';
+    if (archetype.includes('gardener')) return 'clue_shears';
+    if (archetype.includes('bodybuilder')) return 'clue_shaker';
+    if (archetype.includes('guitarist') || archetype.includes('punk')) return 'clue_pick';
+    if (archetype.includes('commuter') || archetype.includes('tourist')) return 'clue_ticket';
+    return 'clue_ticket'; // Fallback
+};
 
 export default function World() {
   const { app } = useApplication();
+
   const gameState = useGameStore((state) => state.gameState);
+
+  const level = useGameStore((state) => state.level);
+
+  const resetCount = useGameStore((state) => state.resetCount); 
+
   const foundKiller = useGameStore((state) => state.foundKiller);
+
+  const setKillerArchetype = useGameStore((state) => state.setKillerArchetype);
+  
+  const setScanLog = useGameStore((state) => state.setScanLog);
   
   const [textures, setTextures] = useState<Record<string, Texture> | null>(null);
-  const entitiesRef = useRef<Entity[]>([]);
+  
+  const actorsRef = useRef<Entity[]>([]);
+  const [decals, setDecals] = useState<Entity[]>([]); 
+  
   const [isReady, setIsReady] = useState(false);
 
-  // --- LOGIC: ZONING CHECK ---
+  // --- INTERACTION LOGIC ---
+  const handleDecalInteraction = (id: string, type: string, x: number, y: number) => {
+        if (gameState !== 'PLAYING') return;
+
+        if (type === 'mud_patch') {
+            SoundSynth.playClick(); // <--- Sound Added
+            setScanLog("Mud. Fresh prints... someone was running."); // <--- Noir Text
+            setDecals(prev => {
+                const filtered = prev.filter(d => d.id !== id);
+                // Keep the logic that reveals the footprint
+                filtered.push({ id: `revealed_print_${id}`, type: 'footprints', x, y });
+                return filtered;
+            });
+        } else if (type === 'chalk_mark') {
+            SoundSynth.playClick();
+            setScanLog("Gym chalk. Magnesium carbonate. A lifter was here.");
+            setDecals(prev => prev.filter(d => d.id !== id));
+        } else if (type.startsWith('pile_')) {
+            SoundSynth.playReveal(); // <--- Distinct "Discovery" Sound
+            setScanLog("Moved the debris. What was hidden underneath?");
+            setDecals(prev => prev.filter(d => d.id !== id));
+        } else if (type.startsWith('clue_')) {
+            SoundSynth.playClick();
+            
+            // Noir Detective Logic
+            const map: Record<string, string> = {
+                'clue_paint': "Red paint. Messy. I'm looking for an Artist.",
+                'clue_wrapper': "Greasy wrapper. Still warm. Suspect is a Glutton.",
+                'clue_shears': "Garden shears. Distinctive. Suspect is a Gardener.",
+                'clue_shaker': "Protein shaker. Cheap plastic. Suspect is a Gym Bro.",
+                'clue_pick': "Guitar pick. Heavy gauge. Suspect is a Musician.",
+                'clue_ticket': "Metro ticket. One-way. Suspect is a Commuter or Tourist."
+            };
+            setScanLog(map[type] || "Just debris. Doesn't mean anything.");
+        }
+    };
+
   const isValidSpawn = (x: number, y: number) => {
-    // 1. Exclude Paths
     if (y > PATH_Y_TOP && y < PATH_Y_BOTTOM) return false;
     if (x > PATH_X_LEFT && x < PATH_X_RIGHT) return false;
-    
-    // 2. Exclude Plaza
     const distPlaza = Math.sqrt((x - PLAZA_CENTER_X)**2 + (y - PLAZA_CENTER_Y)**2);
     if (distPlaza < PLAZA_RADIUS) return false;
-
-    // 3. Exclude Scenario Stages (The New Logic)
     for (const zone of SCENARIO_ZONES) {
         const dist = Math.sqrt((x - zone.x)**2 + (y - zone.y)**2);
         if (dist < zone.r) return false;
     }
-
     return true;
   };
 
   useEffect(() => {
     let mounted = true;
+
+    // ADD THIS CLEANUP CHECK:
+    // If we are resetting, we might want to clear existing state first
+    setIsReady(false);
+    setDecals([]);
+    actorsRef.current = [];
 
     const initWorld = () => {
         if (!app || !app.renderer) {
@@ -84,100 +145,142 @@ export default function World() {
         try {
             const generated = generateGameTextures(app);
             setTextures(generated);
-            const newEntities: Entity[] = [];
+            
+            const newActors: Entity[] = [];
+            const newDecals: Entity[] = [];
             let idCounter = 0;
 
-            const add = (type: EntityType, x: number, y: number, speed = 0, texOverride?: string) => {
-              newEntities.push({
-                id: `${type}_${idCounter++}`,
+            const addActor = (type: EntityType, x: number, y: number, speed = 0, texOverride?: string) => {
+              newActors.push({
+                id: `actor_${type}_${idCounter++}`,
                 type,
                 textureKey: texOverride, 
-                x,
-                y,
-                speed,
-                targetX: x,
-                targetY: y,
-                waitTimer: 0
+                x, y, speed, targetX: x, targetY: y, waitTimer: 0
               });
             };
 
+            const addDecal = (type: EntityType, x: number, y: number, texOverride?: string) => {
+                newDecals.push({
+                    id: `decal_${type}_${idCounter++}`,
+                    type, textureKey: texOverride, x, y
+                });
+            }
+
+            // --- 0. PRE-CALCULATE KILLER IDENTITY ---
+            // We do this FIRST so the crime scene matches the killer.
+            const possibleKillers = [
+                'human_elder', 'human_punk', 'human_suit', 'clown', 'kid_balloon', 
+                'hipster', 'guitarist', 'bodybuilder', 'cyclist', 'tourist', 'goth',
+                'artist', 'gardener', 'commuter', 'glutton'
+            ];
+            const killerBase = possibleKillers[rng.int(0, possibleKillers.length - 1)];
+            setKillerArchetype(killerBase); 
+            console.log(`DEBUG: Killer identified as ${killerBase}`);   
+            const killerSkin = rng.int(0, (killerBase === 'clown' ? 0 : 2));
+            const killerFullType = `${killerBase}_${killerSkin}`;
+            
+            const weapon = rng.bool() ? 'gun' : 'knife';
+            const signatureClue = getClueForArchetype(killerBase);
+            const bloodType = weapon === 'gun' ? 'blood_gun' : 'blood_knife';
+
+            console.log(`DEBUG: Killer is ${killerFullType} with ${weapon}. Clue: ${signatureClue}`);
+
             // --- 1. CORE LAYOUT ---
-            add('fountain', PLAZA_CENTER_X, PLAZA_CENTER_Y);
-            add('bench', 200, PATH_Y_TOP - 10); add('bench', 600, PATH_Y_TOP - 10);
-            add('bench', 200, PATH_Y_BOTTOM + 20); add('bench', 600, PATH_Y_BOTTOM + 20);
-            add('lamppost', 340, 240); add('lamppost', 460, 240);
-            add('lamppost', 340, 360); add('lamppost', 460, 360);
-            add('trashcan', 150, 250); add('trashcan', 650, 350);
+            addDecal('fountain', PLAZA_CENTER_X, PLAZA_CENTER_Y);
+            addDecal('bench', 200, PATH_Y_TOP - 10); addDecal('bench', 600, PATH_Y_TOP - 10);
+            addDecal('bench', 200, PATH_Y_BOTTOM + 20); addDecal('bench', 600, PATH_Y_BOTTOM + 20);
+            addDecal('lamppost', 340, 240); addDecal('lamppost', 460, 240);
+            addDecal('lamppost', 340, 360); addDecal('lamppost', 460, 360);
+            addDecal('trashcan', 150, 250); addDecal('trashcan', 650, 350);
 
             // --- 2. GRID JITTER FLORA ---
-            // (Now respects the Scenario Zones via isValidSpawn)
             const placeFlora = (xMin: number, xMax: number, yMin: number, yMax: number) => {
                 const cellSize = 60;
                 for(let x = xMin; x < xMax; x += cellSize) {
                     for(let y = yMin; y < yMax; y += cellSize) {
-                        // Check logic first
                         if (!isValidSpawn(x + 30, y + 30)) continue;
-                        
-                        if (rng.float(0, 1) > 0.4) { // Slightly increased density since we have less space now
+                        if (rng.float(0, 1) > 0.4) {
                             const type = rng.float(0, 1) > 0.5 ? 'tree' : 'bush';
                             const jX = x + rng.float(5, 45); 
                             const jY = y + rng.float(5, 45);
-                            
-                            // Double check exact spot
-                            if (isValidSpawn(jX, jY)) {
-                                add(type, jX, jY);
-                            }
+                            if (isValidSpawn(jX, jY)) addDecal(type, jX, jY);
                         }
                     }
                 }
             };
+            placeFlora(0, 360, 0, 260); placeFlora(440, 800, 0, 260); 
+            placeFlora(0, 360, 340, 600); placeFlora(440, 800, 340, 600); 
 
-            placeFlora(0, 360, 0, 260); // Q1
-            placeFlora(440, 800, 0, 260); // Q2
-            placeFlora(0, 360, 340, 600); // Q3
-            placeFlora(440, 800, 340, 600); // Q4
+            // --- RED HERRINGS (Trash Expansion) ---
+            // These are interactable piles that behave exactly like the main clue pile
+            // (click -> sound -> remove), but reveal NOTHING. This wastes the player's time.
+            const trashCount = 2 + Math.floor(level * 1.5); // Escalate trash density
+            for(let i=0; i<trashCount; i++) {
+                const rx = rng.float(50, 750);
+                const ry = rng.float(350, 550);
+                
+                // Ensure we don't spawn on top of the actual crime scene (approximate check)
+                const distToCrime = Math.sqrt((rx - 600)**2 + (ry - 480)**2);
+                
+                if(isValidSpawn(rx, ry) && distToCrime > 100) {
+                        const type = rng.bool() ? 'pile_trash' : 'pile_leaves';
+                        addDecal(type, rx, ry);
+                }
+            }
 
-            // --- 3. QUADRANT SCENARIOS ---
+            // --- 3. SCENARIOS ---
             // Q1: Joy
-            add('ice_cream_cart', 100, 100);
-            add('balloon_stand', 130, 95);
-            add('human_worker_0', 100, 80); 
+            addDecal('ice_cream_cart', 100, 100); addDecal('balloon_stand', 130, 95);
+            addActor('human_worker_0', 100, 80); 
+            for(let i=0; i<3; i++) addDecal('ice_cream_stain', rng.float(80, 150), rng.float(120, 180));
 
             // Q2: Leisure
-            add('picnic_blanket', 600, 100);
-            add('picnic_basket', 600, 90);
-            add('picnic_blanket', 680, 180);
+            addDecal('picnic_blanket', 600, 100); addDecal('picnic_basket', 600, 90); addDecal('picnic_blanket', 680, 180);
+            for(let i=0; i<2; i++) addDecal('mud_patch', rng.float(550, 750), rng.float(50, 250));
             
             // Q3: Activity
-            add('pullup_bar', 100, 450);
-            add('pullup_bar', 160, 450);
+            addDecal('pullup_bar', 100, 450); addDecal('pullup_bar', 160, 450);
+            for(let i=0; i<4; i++) addDecal('chalk_mark', rng.float(80, 180), rng.float(480, 520));
             
-            // Q4: Crime
+            // Q4: CRIME SCENE (Dynamic)
             const graveX = 600; const graveY = 480;
-            add('fresh_grave', graveX, graveY);
-            add('casket_open', graveX, graveY - 10); 
-            add('shovel_ground', graveX + 40, graveY + 10);
-            add('blood_stain', graveX - 30, graveY + 20);
-            add('footprints', graveX - 50, graveY + 40);
-            add('footprints', graveX - 70, graveY + 55);
-
-            // --- 4. POPULATION (Smart Distribution) ---
-            const civilians: string[] = [];
+            addDecal('fresh_grave', graveX, graveY);
+            addDecal('casket_open', graveX, graveY - 10); 
+            addDecal('shovel_ground', graveX + 40, graveY + 10);
             
-            // Helper to spawn a type in a specific rect, else global
+            // DYNAMIC BLOOD: Based on weapon
+            addDecal(bloodType, graveX - 30, graveY + 20);
+            
+            // FOOTPRINTS
+            addDecal('footprints', graveX - 50, graveY + 40);
+            addDecal('footprints', graveX - 70, graveY + 55);
+
+            // DYNAMIC CLUE + CONCEALMENT
+            // 1. Add Clue (Bottom)
+            const clueX = graveX - rng.float(20, 60);
+            const clueY = graveY + rng.float(60, 80);
+            addDecal(signatureClue, clueX, clueY);
+            
+            // 2. Add Pile (Top - Covering Clue)
+            const pileType = rng.bool() ? 'pile_trash' : 'pile_leaves';
+            addDecal(pileType, clueX, clueY);
+
+            // --- 4. POPULATION ---
+            // As level increases, add more crowd noise to make finding the killer harder.
+            const difficultyMod = Math.floor((level - 1) * 2); // +2 people per level
             const spawnInZone = (base: string, count: number, zone?: {x:number, y:number, w:number, h:number}) => {
-                for(let i=0; i<count; i++) {
-                    const skinId = rng.int(0, 2); // Variation
-                    const type = `${base}_${skinId}`; // Simplified variation mapping
-                    // NOTE: asset generator makes human_elder_0, _1, _2. 
-                    // So we pick a random index up to the max defined in AssetGen.
-                    
-                    // Actually, let's fix the ID lookup to be safe:
-                    // If max is 3, pick 0-2.
+              // Apply difficulty modifier to the count
+              const finalCount = count + (base === 'tourist' || base === 'commuter' ? difficultyMod : 0);                
+              
+              for(let i=0; i<count; i++) {
                     const max = base === 'clown' ? 0 : 2; 
                     const validId = rng.int(0, max);
                     const finalType = `${base}_${validId}`;
                     
+                    // IF this random civ happens to match the Killer we pre-selected, SKIP IT.
+                    // We will spawn the "Real" Killer manually at the end.
+                    if (finalType === killerFullType) continue; 
+
                     let x, y;
                     if (zone) {
                         x = rng.float(zone.x, zone.x + zone.w);
@@ -186,90 +289,50 @@ export default function World() {
                         x = rng.float(50, WIDTH-50);
                         y = rng.float(50, HEIGHT-50);
                     }
-
-                    // Variation in speed
                     let speed = 0.8;
                     if (base.includes('punk') || base.includes('kid')) speed = 1.3;
                     if (base.includes('cyclist')) speed = 2.0;
                     if (base.includes('elder')) speed = 0.5;
                     
-                    civilians.push(finalType);
-                    add(finalType, x, y, speed + rng.float(-0.1, 0.1));
+                    addActor(finalType, x, y, speed + rng.float(-0.1, 0.1));
                 }
             };
 
-            // Q1: JOY (Kids, Clowns)
+            // Spawn Civilians (Logic same as before, shortened for brevity)
             spawnInZone('clown', 1, {x:50, y:50, w:300, h:200});
             spawnInZone('kid_balloon', 5, {x:50, y:50, w:300, h:200});
-
-            // Q2: LEISURE (Hipsters, Guitarists, Elders)
             spawnInZone('hipster', 4, {x:450, y:50, w:300, h:200});
             spawnInZone('guitarist', 2, {x:450, y:50, w:300, h:200});
             spawnInZone('human_elder', 3, {x:450, y:50, w:300, h:200});
-
-            // Q3: GYM (Bodybuilders, Cyclists)
             spawnInZone('bodybuilder', 5, {x:50, y:350, w:300, h:200});
             spawnInZone('cyclist', 3, {x:50, y:350, w:300, h:200});
-
-            // GLOBAL / RANDOM (Tourists, Goths, Suits, Punks)
             spawnInZone('tourist', 6);
             spawnInZone('goth', 4);
             spawnInZone('human_suit', 5);
             spawnInZone('human_punk', 5);
-
-            // --- RED HERRING DISTRIBUTION ---
-            
-            // 1. The Artist (Near the Crime Scene or Views)
-            // Placing them in Q4 (Crime) makes them very suspicious!
             spawnInZone('artist', 2, {x:550, y:400, w:150, h:100}); 
-
-            // 2. The Gardener (Near Bushes anywhere)
-            spawnInZone('gardener', 3); // Random placement, but they hold "weapons"
-
-            // 3. The Commuter (Walking along paths?)
-            // We'll spawn them generally. The umbrella looks like a gun.
+            spawnInZone('gardener', 3);
             spawnInZone('commuter', 4);
-
-            // 4. The Glutton (Near Q1 Ice Cream or Q2 Picnic)
             spawnInZone('glutton', 3, {x:400, y:50, w:300, h:200});
-            
-            // --- THE KILLER ---
-            // Killer is now hard to spot. 
-            // Look for: The archetype with a tiny red dot on shoe/hand, or a handle at the waist.
-            // NOT the one covered in paint, and NOT the one holding a giant umbrella.
-            
-            // We need to ensure the killer picks from the FULL list including new ones
-            const allTypes = [...civilians, 'artist_0', 'gardener_0', 'commuter_0', 'glutton_0']; 
-            // (Simplified logic for selecting disguise)
-            
-            const disguiseBase = civilians[rng.int(0, civilians.length - 1)]; // Pick a spawned civ type
-            // OR pick a red herring type to be extra mean? 
-            // Let's stick to the spawned pool so the killer blends in.
 
-            const weapon = rng.bool() ? 'gun' : 'knife';
-            const killerTexture = `killer_${disguiseBase}_${weapon}`;
-            
-            console.log(`DEBUG: Killer is ${disguiseBase} with ${weapon}`);
-            add('killer', rng.float(500, 700), rng.float(400, 550), 0.95, killerTexture);
+            // --- 5. SPAWN THE KILLER ---
+            const killerTexKey = `killer_${killerFullType}_${weapon}`;
+            addActor('killer', rng.float(500, 700), rng.float(400, 550), 0.95, killerTexKey);
 
-            entitiesRef.current = newEntities;
+            actorsRef.current = newActors;
+            setDecals(newDecals);
             setIsReady(true);
         } catch (err) { console.error(err); }
     };
     initWorld();
     return () => { mounted = false; };
-  }, [app]);
+  }, [app, resetCount]); 
 
-  // UseTick
   useTick((ticker) => {
-    if (!isReady) return;
+    if (!isReady || (gameState !== 'PLAYING' && gameState !== 'IDLE')) return;
     const delta = ticker.deltaTime;
-    
-    // --- UPDATED LOGIC ---
-    // Pause the world simulation if we are in a menu, dialogue, or minigame.
-    if (gameState !== 'PLAYING' && gameState !== 'IDLE') return;
 
-    entitiesRef.current.forEach(entity => {
+    actorsRef.current.forEach(entity => {
       if (entity.speed && entity.speed > 0) {
         if (entity.waitTimer && entity.waitTimer > 0) {
           entity.waitTimer -= delta;
@@ -318,66 +381,92 @@ export default function World() {
 
        {isReady && textures && (
          <WorldRenderer 
-            entities={entitiesRef.current} 
+            actors={actorsRef.current}
+            decals={decals}
             textures={textures} 
             gameState={gameState}
             onFound={foundKiller}
+            onDecalClick={handleDecalInteraction}
          />
        )}
     </>
   );
 }
 
-function WorldRenderer({ entities, textures, gameState, onFound }: any) {
+function WorldRenderer({ actors, decals, textures, gameState, onFound, onDecalClick }: any) {
   const debugMode = useGameStore((state) => state.debugMode)
-  const containerRef = useRef<PixiContainer>(null);
+  const actorContainerRef = useRef<PixiContainer>(null);
   const spriteMap = useRef<Map<string, PixiSprite>>(new Map());
 
   useTick(() => {
-    entities.forEach((entity: Entity) => {
+    actors.forEach((entity: Entity) => {
         const sprite = spriteMap.current.get(entity.id);
         if (sprite) { sprite.x = entity.x; sprite.y = entity.y; sprite.zIndex = entity.y; }
     });
-    if (containerRef.current) containerRef.current.sortChildren();
+    if (actorContainerRef.current) actorContainerRef.current.sortChildren();
   });
 
   return (
-    <pixiContainer ref={containerRef} sortableChildren={true}>
-      {entities.map((entity: Entity) => {
-        const texKey = entity.textureKey || entity.type;
-        if (!textures[texKey]) return null;
+    <>
+        <pixiContainer zIndex={0} sortableChildren={false}>
+            {decals.map((entity: Entity) => {
+                const texKey = entity.textureKey || entity.type;
+                if (!textures[texKey]) return null;
+                
+                // Added 'clue_' check so we can click them after the pile is gone
+                const isInteractive = ['mud_patch', 'chalk_mark', 'pile_trash', 'pile_leaves'].includes(entity.type) || entity.type.startsWith('clue_');
+                return (
+                    <pixiSprite
+                        key={entity.id}
+                        texture={textures[texKey]}
+                        anchor={0.5}
+                        x={entity.x}
+                        y={entity.y}
+                        eventMode={isInteractive ? 'static' : 'none'}
+                        cursor={isInteractive ? 'pointer' : 'default'}
+                        onPointerDown={() => {
+                            if(isInteractive) onDecalClick(entity.id, entity.type, entity.x, entity.y);
+                        }}
+                    />
+                )
+            })}
+        </pixiContainer>
 
-        return (
-            <pixiSprite
-              key={entity.id}
-              ref={(el) => { if (el) spriteMap.current.set(entity.id, el); else spriteMap.current.delete(entity.id); }}
-              texture={textures[texKey]}
-              anchor={0.5}
-              eventMode={entity.type === 'killer' ? 'static' : 'none'}
-              cursor={entity.type === 'killer' ? 'pointer' : 'default'}
-              onPointerDown={() => { 
-                if (gameState === 'PLAYING' && entity.type === 'killer') onFound(); 
-              }}
-            >
-              {/* --- CONDITIONAL DEBUG HINT --- */}
-              {/* Only show if debugMode is TRUE AND entity is killer */}
-              {debugMode && entity.type === 'killer' && (
-                <pixiGraphics
-                  draw={(g) => {
-                    g.clear();
-                    g.lineStyle(2, 0xFFFF00, 1);
-                    g.drawRect(-20, -40, 40, 50);
-                    g.beginFill(0xFF0000);
-                    g.moveTo(0, -50);
-                    g.lineTo(-10, -60);
-                    g.lineTo(10, -60);
-                    g.endFill();
-                  }}
-                />
-              )}
-            </pixiSprite>
-        );
-      })}
-    </pixiContainer>
+        <pixiContainer ref={actorContainerRef} zIndex={1} sortableChildren={true}>
+            {actors.map((entity: Entity) => {
+                const texKey = entity.textureKey || entity.type;
+                if (!textures[texKey]) return null;
+
+                return (
+                    <pixiSprite
+                    key={entity.id}
+                    ref={(el) => { if (el) spriteMap.current.set(entity.id, el); else spriteMap.current.delete(entity.id); }}
+                    texture={textures[texKey]}
+                    anchor={0.5}
+                    eventMode={entity.type === 'killer' ? 'static' : 'none'}
+                    cursor={entity.type === 'killer' ? 'pointer' : 'default'}
+                    onPointerDown={() => { 
+                        if (gameState === 'PLAYING' && entity.type === 'killer') onFound(); 
+                    }}
+                    >
+                    {debugMode && entity.type === 'killer' && (
+                        <pixiGraphics
+                        draw={(g) => {
+                            g.clear();
+                            g.lineStyle(2, 0xFFFF00, 1);
+                            g.drawRect(-20, -40, 40, 50);
+                            g.beginFill(0xFF0000);
+                            g.moveTo(0, -50);
+                            g.lineTo(-10, -60);
+                            g.lineTo(10, -60);
+                            g.endFill();
+                        }}
+                        />
+                    )}
+                    </pixiSprite>
+                );
+            })}
+        </pixiContainer>
+    </>
   );
 }
