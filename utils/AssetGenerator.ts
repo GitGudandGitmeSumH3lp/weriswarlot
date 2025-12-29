@@ -1,3 +1,5 @@
+// --- FILE: utils/AssetGenerator.ts ---
+
 import { Application, Graphics, Texture } from 'pixi.js';
 
 export type AssetType = 
@@ -8,11 +10,12 @@ export type AssetType =
   | 'blood_gun' | 'blood_knife' 
   | 'pile_trash' | 'pile_leaves'
   | 'clue_paint' | 'clue_wrapper' | 'clue_shears' | 'clue_shaker' | 'clue_pick' | 'clue_ticket'
+  | 'device_part' // <--- [ADDED] New Asset Type for Bomb Scavenger Hunt
   | string; 
 
 // --- COLOR PALETTES ---
-const SKINS = [0xFFCCBC, 0x8D6E63, 0xFFE0B2, 0x5D4037, 0xFFF9C4]; // Added Pale
-const HAIR_COLORS = [0x000000, 0x5D4037, 0xFFEB3B, 0xE0E0E0, 0xD84315, 0x9E9E9E, 0x7B1FA2]; // Added Purple
+const SKINS = [0xFFCCBC, 0x8D6E63, 0xFFE0B2, 0x5D4037, 0xFFF9C4]; 
+const HAIR_COLORS = [0x000000, 0x5D4037, 0xFFEB3B, 0xE0E0E0, 0xD84315, 0x9E9E9E, 0x7B1FA2]; 
 const NEONS = [0x76FF03, 0x00E5FF, 0xF50057, 0xFFEA00];
 
 // --- GRID HELPERS ---
@@ -86,14 +89,10 @@ const drawHair = (g: Graphics, style: number, color: number) => {
 // The "Hidden" Weapon (Killer Only)
 const drawHiddenWeapon = (g: Graphics, type: 'knife' | 'gun') => {
     if (type === 'knife') {
-        // Handle sticking out of pocket/belt
         drawPixelRect(g, 0x3E2723, 22, 26, 2, 4); 
-        // Tiny Blood Drop on Shoe (The Tell)
         drawPixelRect(g, 0xB71C1C, 11, 42, 2, 2); 
     } else {
-        // Gun bulge / Handle inside jacket
         drawPixelRect(g, 0x424242, 20, 20, 4, 4);
-        // Tiny Blood Drop on Hand
         drawPixelRect(g, 0xB71C1C, 24, 28, 1, 1);
     }
 };
@@ -116,132 +115,112 @@ const painters = {
         drawPixelRect(g, 0xC62828, 15, 14, 3, 10); drawHair(g, 1, HAIR_COLORS[i%6]); drawPixelRect(g, 0x3E2723, 24, 24, 4, 10); 
     },
 
-
     // 2. SCENARIO: Q1 JOY
     clown: (g: Graphics, i: number) => {
-        // Polka Dot Suit
         g.beginFill(0x000000, 0.3); g.drawEllipse(16, 46, 10, 3); g.endFill();
-        drawPatternRect(g, 0xFFEB3B, 0xF50057, 'polka', 11, 28, 5, 16); // Legs
+        drawPatternRect(g, 0xFFEB3B, 0xF50057, 'polka', 11, 28, 5, 16); 
         drawPatternRect(g, 0xFFEB3B, 0xF50057, 'polka', 17, 28, 5, 16); 
-        drawPatternRect(g, 0xFFEB3B, 0xF50057, 'polka', 9, 12, 15, 16); // Torso
-        drawPixelRect(g, 0xFFFFFF, 10, 0, 12, 12); // Face Paint
-        drawPixelRect(g, 0xF50057, 15, 6, 2, 2); // Nose
-        drawHair(g, 7, 0xF50057); // Red Wig
+        drawPatternRect(g, 0xFFEB3B, 0xF50057, 'polka', 9, 12, 15, 16); 
+        drawPixelRect(g, 0xFFFFFF, 10, 0, 12, 12); 
+        drawPixelRect(g, 0xF50057, 15, 6, 2, 2); 
+        drawHair(g, 7, 0xF50057); 
     },
     kid_balloon: (g: Graphics, i: number) => {
-        // Short Kid
         g.beginFill(0x000000, 0.3); g.drawEllipse(16, 46, 10, 3); g.endFill();
         drawPixelRect(g, 0x0D47A1, 11, 28, 5, 12); 
         drawPixelRect(g, 0x0D47A1, 17, 28, 5, 12); 
-        drawPatternRect(g, 0xFFFFFF, 0x0D47A1, 'stripes_horz', 9, 14, 15, 14); // Striped Shirt
+        drawPatternRect(g, 0xFFFFFF, 0x0D47A1, 'stripes_horz', 9, 14, 15, 14); 
         drawPixelRect(g, SKINS[i%4], 10, 2, 12, 12);
-        drawHair(g, 5, 0xF50057); // Cap
-        // Balloon
-        drawPixelRect(g, 0xFFFFFF, 24, -10, 1, 34); // String
-        drawPixelCircle(g, NEONS[i%4], 24, -14, 6); // Balloon
+        drawHair(g, 5, 0xF50057); 
+        drawPixelRect(g, 0xFFFFFF, 24, -10, 1, 34); 
+        drawPixelCircle(g, NEONS[i%4], 24, -14, 6); 
     },
 
     // 3. SCENARIO: Q2 LEISURE
     hipster: (g: Graphics, i: number) => {
-        drawMannequin(g, SKINS[i%4], 0x000000, 0x1A237E); // Placeholder torso color
-        drawPatternRect(g, 0xB71C1C, 0x212121, 'plaid', 9, 12, 15, 16); // Flannel
-        drawHair(g, 6, 0x424242); // Beanie
-        drawPixelRect(g, 0x5D4037, 10, 8, 12, 4); // Beard
-        drawPixelRect(g, 0xFFFFFF, 24, 20, 4, 6); // Coffee Cup
+        drawMannequin(g, SKINS[i%4], 0x000000, 0x1A237E); 
+        drawPatternRect(g, 0xB71C1C, 0x212121, 'plaid', 9, 12, 15, 16); 
+        drawHair(g, 6, 0x424242); 
+        drawPixelRect(g, 0x5D4037, 10, 8, 12, 4); 
+        drawPixelRect(g, 0xFFFFFF, 24, 20, 4, 6); 
     },
     guitarist: (g: Graphics, i: number) => {
         drawMannequin(g, SKINS[i%4], 0x212121, 0x424242);
-        drawHair(g, 3, 0x000000); // Long hair
-        // Guitar Case on Back
+        drawHair(g, 3, 0x000000); 
         drawPixelRect(g, 0x3E2723, 11, 14, 10, 20); 
-        drawPixelRect(g, 0x5D4037, 14, 10, 4, 4); // Neck
+        drawPixelRect(g, 0x5D4037, 14, 10, 4, 4); 
     },
 
     // 4. SCENARIO: Q3 GYM
     bodybuilder: (g: Graphics, i: number) => {
         g.beginFill(0x000000, 0.3); g.drawEllipse(16, 46, 10, 3); g.endFill();
-        drawPixelRect(g, 0x212121, 11, 28, 5, 16); // Legs
+        drawPixelRect(g, 0x212121, 11, 28, 5, 16); 
         drawPixelRect(g, 0x212121, 17, 28, 5, 16); 
-        // Swole Arms (Skin)
         drawPixelRect(g, SKINS[i%4], 7, 12, 4, 14); 
         drawPixelRect(g, SKINS[i%4], 22, 12, 4, 14);
-        drawPixelRect(g, 0x9E9E9E, 9, 12, 15, 16); // Tank Top
+        drawPixelRect(g, 0x9E9E9E, 9, 12, 15, 16); 
         drawPixelRect(g, SKINS[i%4], 10, 0, 12, 12);
-        drawHair(g, 0, 0); // Bald
+        drawHair(g, 0, 0); 
     },
     cyclist: (g: Graphics, i: number) => {
         const color = NEONS[i%4];
         drawMannequin(g, SKINS[i%4], color, 0x212121);
-        drawPatternRect(g, color, 0xFFFFFF, 'stripes_horz', 9, 12, 15, 16); // Jersey
+        drawPatternRect(g, color, 0xFFFFFF, 'stripes_horz', 9, 12, 15, 16); 
         drawHair(g, 1, 0x000000);
-        drawPixelRect(g, 0x424242, 9, -2, 14, 6); // Helmet
-        drawPixelRect(g, 0x212121, 10, 4, 12, 2); // Visor shades
+        drawPixelRect(g, 0x424242, 9, -2, 14, 6); 
+        drawPixelRect(g, 0x212121, 10, 4, 12, 2); 
     },
 
     // 5. GLOBAL
     tourist: (g: Graphics, i: number) => {
         drawMannequin(g, SKINS[i%4], 0xFFFFFF, 0xD7CCC8);
-        drawPatternRect(g, 0xFF5722, 0xFFEB3B, 'noise', 9, 12, 15, 16); // Hawaiian Shirt
-        drawPixelRect(g, 0xFFFFFF, 8, -4, 16, 4); // Sun Hat Brim
-        drawPixelRect(g, 0xFFFFFF, 10, -6, 12, 4); // Sun Hat Top
-        drawPixelRect(g, 0x212121, 13, 18, 6, 4); // Camera
-        drawPixelRect(g, 0x212121, 12, 16, 1, 6); // Strap L
-        drawPixelRect(g, 0x212121, 19, 16, 1, 6); // Strap R
+        drawPatternRect(g, 0xFF5722, 0xFFEB3B, 'noise', 9, 12, 15, 16); 
+        drawPixelRect(g, 0xFFFFFF, 8, -4, 16, 4); 
+        drawPixelRect(g, 0xFFFFFF, 10, -6, 12, 4); 
+        drawPixelRect(g, 0x212121, 13, 18, 6, 4); 
+        drawPixelRect(g, 0x212121, 12, 16, 1, 6); 
+        drawPixelRect(g, 0x212121, 19, 16, 1, 6); 
     },
     goth: (g: Graphics, i: number) => {
-        drawMannequin(g, 0xFFF9C4, 0x000000, 0x000000); // Pale Skin
-        drawPatternRect(g, 0x000000, 0x424242, 'plaid', 11, 28, 5, 16); // Fishnets/Plaid
+        drawMannequin(g, 0xFFF9C4, 0x000000, 0x000000); 
+        drawPatternRect(g, 0x000000, 0x424242, 'plaid', 11, 28, 5, 16); 
         drawPatternRect(g, 0x000000, 0x424242, 'plaid', 17, 28, 5, 16);
-        drawHair(g, 3, 0x000000); // Long Black
-        drawPixelRect(g, 0x000000, 10, 4, 12, 1); // Eye liner
+        drawHair(g, 3, 0x000000); 
+        drawPixelRect(g, 0x000000, 10, 4, 12, 1); 
     },
 
     // --- NEW: THE RED HERRINGS ---
-    // 1. THE ARTIST (False Positive: Red Paint)
     artist: (g: Graphics, i: number) => {
-        drawMannequin(g, 0xFFE0B2, 0xFFFFFF, 0x8D6E63); // White Smock
-        drawHair(g, 6, 0x212121); // Beret-ish
-        // Red Paint Splotches (Too big to be the killer's subtle stain)
+        drawMannequin(g, 0xFFE0B2, 0xFFFFFF, 0x8D6E63); 
+        drawHair(g, 6, 0x212121); 
         drawPixelRect(g, 0xF44336, 12, 16, 4, 4); 
         drawPixelRect(g, 0xF44336, 18, 22, 3, 5);
-        // Holding Brush
         drawPixelRect(g, 0x8D6E63, 24, 22, 2, 8); 
-        drawPixelRect(g, 0xF44336, 24, 20, 2, 2); // Red Tip
+        drawPixelRect(g, 0xF44336, 24, 20, 2, 2); 
     },
-
-    // 2. THE GARDENER (False Positive: Weapon-like Tool)
     gardener: (g: Graphics, i: number) => {
-        drawMannequin(g, 0x8D6E63, 0x33691E, 0x1B5E20); // Green Overalls
-        drawHair(g, 5, 0x33691E); // Cap
-        // Hedge Shears (Look scary but fit context)
-        drawPixelRect(g, 0x9E9E9E, 22, 20, 2, 12); // Blade 1
-        drawPixelRect(g, 0x9E9E9E, 25, 20, 2, 12); // Blade 2
-        drawPixelRect(g, 0x3E2723, 22, 32, 5, 4); // Handles
+        drawMannequin(g, 0x8D6E63, 0x33691E, 0x1B5E20); 
+        drawHair(g, 5, 0x33691E); 
+        drawPixelRect(g, 0x9E9E9E, 22, 20, 2, 12); 
+        drawPixelRect(g, 0x9E9E9E, 25, 20, 2, 12); 
+        drawPixelRect(g, 0x3E2723, 22, 32, 5, 4); 
     },
-
-    // 3. THE COMMUTER (False Positive: Gun-like Umbrella)
     commuter: (g: Graphics, i: number) => {
-        drawMannequin(g, 0xFFCCBC, 0x455A64, 0x263238); // Grey Coat
+        drawMannequin(g, 0xFFCCBC, 0x455A64, 0x263238); 
         drawHair(g, 1, 0x000000);
-        // Black Umbrella on Back (Diagonal)
-        // Looks like a rifle from a distance
         g.beginFill(0x000000);
-        g.moveTo(10, 14); g.lineTo(24, 30); // Shaft
+        g.moveTo(10, 14); g.lineTo(24, 30); 
         g.lineTo(26, 28); g.lineTo(12, 12);
         g.endFill();
-        drawPixelRect(g, 0x000000, 24, 30, 4, 2); // Handle curve
+        drawPixelRect(g, 0x000000, 24, 30, 4, 2); 
     },
-
-    // 4. THE GLUTTON (False Positive: Ketchup Stain)
     glutton: (g: Graphics, i: number) => {
-        drawMannequin(g, 0xFFE0B2, 0xFFFFFF, 0x0277BD); // White Shirt
-        // Mustard/Ketchup Stain
+        drawMannequin(g, 0xFFE0B2, 0xFFFFFF, 0x0277BD); 
         drawPixelRect(g, 0xFFEB3B, 14, 18, 2, 2);
-        drawPixelRect(g, 0xB71C1C, 16, 16, 3, 3); // The red blotch
-        drawHair(g, 0, 0); // Bald
-        // Holding Hot Dog
-        drawPixelRect(g, 0xF57F17, 24, 22, 4, 8); // Bun
-        drawPixelRect(g, 0xB71C1C, 25, 22, 2, 8); // Sausage
+        drawPixelRect(g, 0xB71C1C, 16, 16, 3, 3); 
+        drawHair(g, 0, 0); 
+        drawPixelRect(g, 0xF57F17, 24, 22, 4, 8); 
+        drawPixelRect(g, 0xB71C1C, 25, 22, 2, 8); 
     }
 };
 
@@ -249,49 +228,95 @@ const painters = {
 const forensicPainters = {
     // COVER OBJECTS
     pile_trash: (g: Graphics) => {
-        // A messy heap of urban debris
-        drawPixelCircle(g, 0x424242, 16, 16, 14); // Base shadow
-        drawPixelRect(g, 0xE0E0E0, 10, 10, 6, 8); // Paper
-        drawPixelRect(g, 0x212121, 18, 14, 8, 8); // Bag
-        drawPixelRect(g, 0x795548, 14, 20, 6, 6); // Box
-        drawPixelRect(g, 0xFFFFFF, 20, 8, 2, 2); // Glint
+        drawPixelCircle(g, 0x757575, 16, 16, 16); 
+        drawPixelRect(g, 0xEEEEEE, 10, 8, 8, 10); 
+        drawPixelRect(g, 0x212121, 18, 14, 8, 8); 
+        drawPixelRect(g, 0x8D6E63, 12, 20, 8, 6); 
     },
     pile_leaves: (g: Graphics) => {
-        // Organic heap
-        drawPixelCircle(g, 0x3E2723, 16, 16, 14);
-        drawPixelRect(g, 0xD84315, 8, 12, 6, 4); // Orange leaf
-        drawPixelRect(g, 0x5D4037, 18, 10, 6, 6); // Brown leaf
-        drawPixelRect(g, 0x2E7D32, 14, 20, 4, 4); // Green leaf
-        drawPixelRect(g, 0xD84315, 22, 16, 4, 6);
+        drawPixelCircle(g, 0x5D4037, 16, 16, 16); 
+        drawPixelRect(g, 0xFF5722, 6, 10, 8, 6);  
+        drawPixelRect(g, 0xFFC107, 20, 8, 8, 6);  
+        drawPixelRect(g, 0x8D6E63, 16, 22, 6, 6); 
+        drawPixelRect(g, 0xFF5722, 24, 18, 6, 6); 
     },
 
-    // CLUES (Tiny items hidden under piles)
-    clue_paint: (g: Graphics) => { // Artist
-        drawPixelRect(g, 0xE0E0E0, 12, 12, 8, 4); // Tube body
-        drawPixelRect(g, 0x212121, 20, 13, 2, 2); // Cap
-        drawPixelRect(g, 0xF44336, 10, 12, 2, 2); // Red paint smear
+    flower_patch: (g: Graphics) => {
+    const colors = [0xFF4081, 0xFFEB3B, 0x7C4DFF, 0xFFFFFF]; 
+    for(let i=0; i<6; i++) {
+        const cx = 8 + Math.random() * 16;
+        const cy = 8 + Math.random() * 16;
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        drawPixelRect(g, 0x4CAF50, cx, cy+2, 2, 4);
+        drawPixelRect(g, color, cx-2, cy, 6, 2);
+        drawPixelRect(g, color, cx, cy-2, 2, 6);
+        drawPixelRect(g, 0xFFFFFF, cx, cy, 2, 2);
+        }
     },
-    clue_wrapper: (g: Graphics) => { // Glutton
-        drawPixelRect(g, 0xFFEB3B, 10, 10, 12, 8); // Wrapper
-        drawPixelRect(g, 0xB71C1C, 12, 12, 4, 4); // Logo
+
+    // CLUES
+    clue_paint: (g: Graphics) => { 
+        drawPixelRect(g, 0xE0E0E0, 12, 12, 8, 4); 
+        drawPixelRect(g, 0x212121, 20, 13, 2, 2); 
+        drawPixelRect(g, 0xF44336, 10, 12, 2, 2); 
     },
-    clue_shears: (g: Graphics) => { // Gardener
-        drawPixelRect(g, 0x9E9E9E, 10, 10, 12, 2); // Blade
-        drawPixelRect(g, 0x3E2723, 10, 12, 4, 4); // Handle
+    clue_wrapper: (g: Graphics) => { 
+        drawPixelRect(g, 0xFFEB3B, 10, 10, 12, 8); 
+        drawPixelRect(g, 0xB71C1C, 12, 12, 4, 4); 
     },
-    clue_shaker: (g: Graphics) => { // Bodybuilder
-        drawPixelRect(g, 0x90A4AE, 12, 8, 6, 14); // Bottle
-        drawPixelRect(g, 0x263238, 12, 6, 6, 2); // Lid
+    clue_shears: (g: Graphics) => { 
+        drawPixelRect(g, 0x9E9E9E, 10, 10, 12, 2); 
+        drawPixelRect(g, 0x3E2723, 10, 12, 4, 4); 
     },
-    clue_pick: (g: Graphics) => { // Guitarist/Punk
-        // Triangle shape
+    clue_shaker: (g: Graphics) => { 
+        drawPixelRect(g, 0x90A4AE, 12, 8, 6, 14); 
+        drawPixelRect(g, 0x263238, 12, 6, 6, 2); 
+    },
+    clue_pick: (g: Graphics) => { 
         g.beginFill(0xD81B60);
         g.moveTo(16, 20); g.lineTo(10, 10); g.lineTo(22, 10);
         g.endFill();
     },
-    clue_ticket: (g: Graphics) => { // Commuter/Tourist
+    clue_ticket: (g: Graphics) => { 
         drawPixelRect(g, 0xFFFFFF, 10, 12, 14, 6);
-        drawPixelRect(g, 0x000000, 12, 14, 10, 1); // Barcode
+        drawPixelRect(g, 0x000000, 12, 14, 10, 1); 
+    },
+    item_wallet: (g: Graphics) => {
+        drawPixelRect(g, 0x5D4037, 8, 12, 16, 10); 
+        drawPixelRect(g, 0x4E342E, 8, 12, 16, 2);  
+        drawPixelRect(g, 0xFFD700, 20, 16, 2, 2);  
+    },
+    item_receipt: (g: Graphics) => {
+        drawPixelRect(g, 0xFFFFFF, 12, 8, 8, 16); 
+        drawPixelRect(g, 0xBDBDBD, 14, 10, 4, 1);
+        drawPixelRect(g, 0xBDBDBD, 14, 13, 3, 1);
+        drawPixelRect(g, 0xBDBDBD, 14, 16, 4, 1);
+        drawPixelRect(g, 0xBDBDBD, 14, 19, 2, 1);
+    },
+    item_glass: (g: Graphics) => {
+        g.beginFill(0x81D4FA, 0.6); 
+        g.moveTo(10, 22); g.lineTo(14, 10); g.lineTo(18, 22); 
+        g.moveTo(22, 24); g.lineTo(28, 14); g.lineTo(26, 26); 
+        g.drawRect(16, 24, 4, 4); 
+        g.endFill();
+    },
+
+    // --- [ADDED] DEVICE PART (BOMB COMPONENT) ---
+    // A jagged PCB board with a blinking red LED and exposed wires
+    device_part: (g: Graphics) => {
+        // PCB Green Base
+        drawPixelRect(g, 0x1B5E20, 8, 8, 16, 16); 
+        drawPixelRect(g, 0x2E7D32, 10, 10, 12, 12); 
+        // Components
+        drawPixelRect(g, 0x212121, 12, 12, 8, 8); // Black Chip
+        drawPixelRect(g, 0xBDBDBD, 11, 12, 1, 2); // Pin
+        drawPixelRect(g, 0xBDBDBD, 11, 16, 1, 2); // Pin
+        // The LED (Bright Red - "ON")
+        drawPixelRect(g, 0xD50000, 20, 20, 4, 4); // Casing
+        drawPixelRect(g, 0xFF1744, 21, 21, 2, 2); // Light
+        // Loose Wires
+        drawPixelRect(g, 0xFFEB3B, 8, 20, 6, 2); 
+        drawPixelRect(g, 0x2962FF, 8, 22, 6, 2); 
     }
 };    
 
@@ -304,8 +329,6 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
     textures[name] = app.renderer.generateTexture({ target: g, resolution: 2 });
   };
 
-  // --- STANDARD ASSETS (Props) ---
-  // (Copying previous environment generators for brevity - Tree, Bush, Bench, Lamp, Trash, Fountain)
   generate('tree', (g) => { drawPixelRect(g, 0x3E2723, 12, 40, 16, 40); drawPixelCircle(g, 0x1B5E20, 20, 20, 24); drawPixelCircle(g, 0x2E7D32, 10, 30, 20); drawPixelCircle(g, 0x388E3C, 30, 30, 20); });
   generate('bush', (g) => { drawPixelCircle(g, 0x2E7D32, 16, 16, 16); drawPixelCircle(g, 0x4CAF50, 24, 16, 12); drawPixelCircle(g, 0x388E3C, 8, 16, 12); });
   generate('bench', (g) => { drawPixelRect(g, 0x424242, 0, 15, 6, 15); drawPixelRect(g, 0x424242, 44, 15, 6, 15); drawPixelRect(g, 0x8D6E63, -2, 12, 54, 8); drawPixelRect(g, 0x6D4C41, -2, 2, 54, 10); });
@@ -313,7 +336,6 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
   generate('trashcan', (g) => { drawPixelRect(g, 0x37474F, 0, 0, 24, 32); drawPixelRect(g, 0x263238, 0, 0, 24, 6); drawPixelRect(g, 0xFFFFFF, 6, 2, 4, 4); });
   generate('fountain', (g) => { drawPixelCircle(g, 0x78909C, 32, 32, 32); drawPixelCircle(g, 0x4FC3F7, 32, 32, 26); drawPixelRect(g, 0xFFFFFF, 30, 20, 4, 12); });
   
-  // Scenarios
   generate('ice_cream_cart', (g) => { drawPixelCircle(g, 0x212121, 10, 36, 6); drawPixelCircle(g, 0x212121, 40, 36, 6); drawPixelRect(g, 0xFFFFFF, 0, 16, 50, 20); drawPixelRect(g, 0xF48FB1, 0, 20, 50, 4); drawPixelRect(g, 0xCCCCCC, 22, -10, 4, 26); g.beginFill(0xF48FB1); g.moveTo(24, -10); g.arc(24, -10, 24, Math.PI, 0); g.lineTo(24, -10); g.endFill(); g.beginFill(0xFFFFFF); g.moveTo(24, -10); g.arc(24, -10, 10, Math.PI, 0); g.lineTo(24, -10); g.endFill(); });
   generate('balloon_stand', (g) => { drawPixelRect(g, 0x5D4037, 10, 10, 20, 20); drawPixelRect(g, 0xFFFFFF, 19, 0, 2, 10); drawPixelCircle(g, 0xFF0000, 15, 0, 6); drawPixelCircle(g, 0x0000FF, 25, -5, 6); drawPixelCircle(g, 0x00FF00, 20, -8, 6); });
   generate('picnic_blanket', (g) => { drawPixelRect(g, 0xFFEBEE, 0, 0, 48, 32); drawPixelRect(g, 0xE57373, 0, 0, 12, 12); drawPixelRect(g, 0xE57373, 24, 0, 12, 12); drawPixelRect(g, 0xE57373, 12, 12, 12, 12); drawPixelRect(g, 0xE57373, 36, 12, 12, 12); });
@@ -322,23 +344,18 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
   generate('fresh_grave', (g) => { drawPixelRect(g, 0x3E2723, 0, 0, 40, 20); drawPixelRect(g, 0x5D4037, -5, -5, 10, 10); drawPixelRect(g, 0x5D4037, 35, 15, 12, 8); });
   generate('casket_open', (g) => { drawPixelRect(g, 0x4E342E, 0, 0, 20, 48); drawPixelRect(g, 0x3E2723, 2, 2, 16, 44); drawPixelRect(g, 0xFFCCBC, 6, 6, 8, 8); drawPixelRect(g, 0xE0E0E0, 4, 14, 12, 30); });
   generate('shovel_ground', (g) => { drawPixelRect(g, 0x9E9E9E, 4, 0, 4, 8); drawPixelRect(g, 0x8D6E63, 5, -16, 2, 16); drawPixelRect(g, 0x8D6E63, 3, -18, 6, 2); });
-  // -- NEW DYNAMIC BLOOD -- //
+ 
   generate('blood_gun', (g) => {
-      // Main impact
       drawPixelCircle(g, 0x880000, 16, 16, 6);
-      // Satellites
       for(let i=0; i<12; i++) {
           const x = 16 + (Math.random() * 24 - 12);
           const y = 16 + (Math.random() * 24 - 12);
           drawPixelRect(g, 0x880000, x, y, 2, 2, 0.8);
       }
   });
-    // 2. KNIFE: Arterial Spurts (Directional pools)
   generate('blood_knife', (g) => {
-      // Large pooling
       drawPixelCircle(g, 0x880000, 16, 16, 10);
-      drawPixelCircle(g, 0x660000, 14, 14, 8); // Darker center
-      // Drag/Spurt line
+      drawPixelCircle(g, 0x660000, 14, 14, 8); 
       drawPixelRect(g, 0x880000, 20, 14, 8, 4);
       drawPixelRect(g, 0x880000, 26, 16, 4, 3);
   });
@@ -357,15 +374,18 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
   generate('clue_shaker', forensicPainters.clue_shaker);
   generate('clue_pick', forensicPainters.clue_pick);
   generate('clue_ticket', forensicPainters.clue_ticket);
-  
-  // --- NEW DECALS (v1.5.1) ---
+  generate('item_wallet', forensicPainters.item_wallet);
+  generate('item_receipt', forensicPainters.item_receipt);
+  generate('item_glass', forensicPainters.item_glass);
+  generate('flower_patch', forensicPainters.flower_patch);
+  generate('device_part', forensicPainters.device_part); // <--- [ADDED] Registration
+
   generate('ice_cream_stain', (g) => { 
-      drawPixelCircle(g, 0xF8BBD0, 16, 16, 8); // Puddle
-      drawPixelRect(g, 0xFFFFFF, 12, 12, 2, 2); // Glint
-      drawPixelRect(g, 0xD7CCC8, 18, 18, 4, 4); // Cone bits
+      drawPixelCircle(g, 0xF8BBD0, 16, 16, 8); 
+      drawPixelRect(g, 0xFFFFFF, 12, 12, 2, 2); 
+      drawPixelRect(g, 0xD7CCC8, 18, 18, 4, 4); 
   });
   generate('chalk_mark', (g) => { 
-      // Low alpha white scuffs (Gym Chalk)
       drawPixelRect(g, 0xFFFFFF, 10, 10, 8, 2, 0.4);
       drawPixelRect(g, 0xFFFFFF, 14, 8, 2, 8, 0.4);
       drawPixelRect(g, 0xFFFFFF, 20, 20, 4, 4, 0.3);
@@ -375,13 +395,13 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
       drawPixelCircle(g, 0x4E342E, 20, 18, 6);
       drawPixelRect(g, 0x3E2723, 12, 12, 4, 4);
   });
+  
 
-  // --- CHARACTER LOOP (Including ALL New Types) ---
   const archetypes = [
       { key: 'human_elder', count: 3, fn: painters.elder },
       { key: 'human_punk', count: 3, fn: painters.punk },
       { key: 'human_suit', count: 3, fn: painters.suit },
-      { key: 'clown', count: 1, fn: painters.clown }, // Rare
+      { key: 'clown', count: 1, fn: painters.clown }, 
       { key: 'kid_balloon', count: 3, fn: painters.kid_balloon },
       { key: 'hipster', count: 3, fn: painters.hipster },
       { key: 'guitarist', count: 2, fn: painters.guitarist },
@@ -389,7 +409,6 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
       { key: 'cyclist', count: 3, fn: painters.cyclist },
       { key: 'tourist', count: 3, fn: painters.tourist },
       { key: 'goth', count: 3, fn: painters.goth },
-       // NEW ONES:
       { key: 'artist', count: 3, fn: painters.artist },
       { key: 'gardener', count: 3, fn: painters.gardener },
       { key: 'commuter', count: 3, fn: painters.commuter },
@@ -399,12 +418,7 @@ export const generateGameTextures = (app: Application): Record<string, Texture> 
   archetypes.forEach(({ key, count, fn }) => {
       for (let i = 0; i < count; i++) {
           const baseName = `${key}_${i}`;
-          // 1. Innocent Version
           generate(baseName, (g) => fn(g, i));
-
-          // 2. KILLER VERSIONS (Subtle)
-          // The Killer mimics the archetype perfectly, BUT has the "Hidden Weapon" and "Blood Drop"
-          // We do NOT use the old `drawWeapon` (Giant Knife). We use `drawHiddenWeapon`.
           
           generate(`killer_${baseName}_knife`, (g) => { 
               fn(g, i); 
