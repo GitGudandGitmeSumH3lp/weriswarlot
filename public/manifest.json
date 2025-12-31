@@ -1,0 +1,16 @@
+{
+  "name": "WERISWARLOT",
+  "short_name": "WERISWARLOT",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#18181b",
+  "theme_color": "#18181b",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

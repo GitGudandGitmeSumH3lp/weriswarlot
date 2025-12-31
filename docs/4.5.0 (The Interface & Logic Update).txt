@@ -1,0 +1,110 @@
+4.5.0
+
+# START OF FILE research.md
+# Context-Clean Research Artifact
+**Project:** WERISWARLOT
+**Version:** 4.5.0 (The Interface & Logic Update)
+**Tech Stack:** Next.js (14-16 range), PixiJS v8, @pixi/react v8 (Extend API), Zustand, Tailwind CSS v4.
+
+## The Architecture (v4.5 - Modular Systems)
+1. **Data Layer (`src/data/`, `src/utils/`):**
+    * `CharacterPainters.ts`: Seeded offsets for skin, hair, and clothing variety.
+    * `PropPainters.ts`: Visual library for environmental storytelling.
+    * `VignetteRegistry.ts`: Definition of "Micro-Stories" (Crime, Herring, Ambiance).
+2. **Systems Layer (`src/systems/gameplay/`):**
+    * `InteractionRouter.ts`: Delegate pattern for clicks (Crisis > Dialogue > Evidence).
+    * `EvidenceSystem.ts`: Context-aware logic using `quality` tags.
+    * `MovementSystem.ts`: Pure physics/grid logic.
+3. **View Layer:**
+    * `World.tsx`: Root Provider (Application context) + UI Overlay sibling.
+    * `GameHUD.tsx`: Immersive HTML overlay using Tailwind CSS.
+    * `SceneLayer.tsx`: Pixi Consumer handling rendering and Z-sorting.
+
+## "Gotchas" & Lessons Learned
+* **Pixi v8 Context Violation:** Hooks like `useApplication` or `useTick` fail if called in the same component that renders `<Application>`. **Solution:** Always split into `World` (Provider) and `GameScene` (Consumer).
+* **Tailwind v4 Transition:** Old `@tailwind` directives fail. Must use `@import "tailwindcss";` in `globals.css` and `@tailwindcss/postcss` in `postcss.config.mjs`.
+* **CSS Stacking (Canvas vs HTML):** HTML siblings of a Pixi Canvas often fall behind it or lose sizing. **Solution:** Use `relative` on parent, `absolute top-0 left-0 z-10` on Canvas, and `z-20+` on UI.
+* **Character Variety:** Simple modulo `i % length` creates clones. **Solution:** Use **Seeded Offsets** `(i + prime_offset) % length` to decouple skin, hair, and shirt choices.
+* **Spawn Collisions:** Static spawn points can overlap with new props (Statues). **Solution:** `findSafeSpawn` spiral search validates tile solidity before placement.
+
+## Directory Structure
+```text
+weriswarlot/
+├── components/
+│   ├── game/
+│   │   ├── layers/ (Terrain, Scene)
+│   │   └── World.tsx (Root Provider/Consumer)
+│   └── ui/
+│       └── GameHUD.tsx (HTML Overlay)
+├── systems/
+│   └── gameplay/ (Router, Evidence, Crisis, Dialogue)
+├── types/
+│   └── GameContext.ts (System toolset)
+├── utils/
+│   ├── CharacterPainters.ts
+│   ├── PropPainters.ts
+│   ├── VignetteRegistry.ts
+│   └── WorldGenerator.ts
+└── store/
+    └── gameStore.ts (Case Strength logic)
+```
+# END OF FILE research.md
+
+# START OF FILE plan.md
+# Context-Clean Plan Artifact
+**Project Version:** 4.5.0
+**Objective:** Finalize UI Visibility & Stabilize Build Toolchain.
+
+## Completed Tasks [x]
+- [x] **v4.3.0: Modular Logic:** Implemented Interaction Router and Gameplay Systems.
+- [x] **v4.3.8: Population Density:** Character Roster system (96 unique variants).
+- [x] **v4.4.0: UI Implementation:** GameHUD, Probability Meter, and Evidence Tray.
+- [x] **v4.4.4: Scene Logic:** findSafeSpawn and Vignette clustering.
+
+## Current / Pending Tasks [ ]
+
+### v4.5.1: The "Clean Slate" Update
+**Goal:** Resolve the CSS toolchain failure by stabilizing versions and cleaning cache.
+
+- [ ] **1. Toolchain Stability Fix**
+    - [ ] Modify `package.json`: Set Next.js to `14.2.3`, React to `18.2.0`, and ensure Tailwind is correctly mapped.
+    - [ ] Delete `node_modules`, `package-lock.json`, and `.next`.
+    - [ ] Execute `npm install`.
+- [ ] **2. Verify CSS Processing**
+    - [ ] Restore `SimpleTailwindTest.tsx` to `World.tsx`.
+    - [ ] Confirm red box is **LARGE** (padding works).
+- [ ] **3. UI Re-Enablement**
+    - [ ] Remove Test component.
+    - [ ] Re-enable `GameHUD.tsx`.
+    - [ ] Verify "BEGIN SIMULATION" button visibility and centering.
+
+## Micro-Steps for Next Agent (v4.5.1)
+1. **Force Package Downgrade:** Update `package.json` to stable `next@14.2.3` and `react@18.2.0`.
+2. **Purge Environment:** Delete the folders mentioned in Task 1.
+3. **Rebuild:** Run `npm install` and `npm run dev`.
+4. **The Hybrid Test:** Use `SimpleTailwindTest.tsx` to verify if Tailwind `p-16` padding finally appears.
+# END OF FILE plan.md
+
+# START OF FILE system.md
+# Context-Clean System Artifact
+**Project Version:** 4.5.0
+
+## Core Rules
+1. **The Provider/Consumer Rule:**
+    * **NEVER** call `useApplication`, `useTick`, or `useGameLogic` (which uses useTick) inside the component that renders `<Application>`.
+    * **ALWAYS** create a child component (e.g., `GameScene`) to hold logic.
+2. **The "Waldo" Visual Rule:**
+    * High prop density (40% spawn chance).
+    * Use **Visual Rhymes** (Ketchup vs. Blood) to create detective difficulty.
+3. **The Interaction Flow:**
+    * `World.tsx` captures click -> `useGameLogic` packages `GameContext` -> `InteractionRouter.ts` finds handler.
+
+## Standardized Patterns
+* **Character Variety:** Archetype + Variant (e.g., `suit_3`). Registry must pre-generate `_0` through `_5` for every painter.
+* **UI Sizing:** `World.tsx` wrapper must have explicit `w-[800px] h-[600px]` to provide a stable context for `absolute inset-0` UI overlays.
+* **Seeded Randomness:** Use prime offsets for decoupling visual choices (Skin +0, Hair +3, Shirt +5, Pants +7).
+
+## Build Constraints (Critical)
+* **Tailwind v4:** Requires `@import "tailwindcss";` and specifically `@tailwindcss/postcss` plugin in `.mjs` config.
+* **React 19/Next 16:** These are currently unstable in this project. Revert to **Next 14 / React 18** if build errors persist.
+# END OF FILE system.md

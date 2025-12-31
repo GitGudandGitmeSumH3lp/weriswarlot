@@ -1,235 +1,169 @@
+// --- FILE: store/gameStore.ts ---
+
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 
-// [CHANGE 1] Added 'BOMB_SEARCH' to valid states
-export type GameState = 
-  | 'IDLE' | 'PLAYING' | 'FOUND' | 'BOMB_SEARCH' | 'MINIGAME' | 'VICTORY' | 'TIMEOUT' | 'GAME_OVER';
+export type GameState = 'IDLE' | 'PLAYING' | 'FOUND' | 'CONFRONTATION' | 'SCENARIO_ACTIVE' | 'GAME_OVER' | 'LEVEL_COMPLETE';
+export type ScenarioType = 'BOMB' | 'EVIDENCE' | 'POISON' | 'ACCOMPLICE';
 
-export type GameOverReason = 'TIMEOUT' | 'BOMB' | 'CAPTURE' | null;
-
-interface GameStore {
-  // State
-  gameState: GameState;
-  score: number;
-  highScore: number;
-  level: number;
-  debugMode: boolean; 
-  timeLeft: number;      
-  bombTimer: number;     
-  panicLevel: number;    
-  resetCount: number;    
-  scanLog: string;
-  
-  killerArchetype: string | null;
-  // [CHANGE 2] New Archetype for Profiler Logic
-  bombArchetype: 'planner' | 'chaotic' | 'cleaner' | null;
-  
-  evidenceCount: number;
-  mistakeCount: number;
-  
-  // [CHANGE 3] New Counter for Physical Evidence
-  bombPartsFound: number; // Target is 3
-  
-  gameOverReason: GameOverReason;
-
-  // Actions
-  setScanLog: (log: string) => void;
-  startGame: () => void;
-  nextLevel: () => void;
-  toggleDebug: () => void;
-  foundKiller: () => void;
-  
-  // [CHANGE 4] Refactored Bomb Logic
-  triggerBombPhase: () => void; // Starts the search
-  startDefusal: () => void;     // Triggers the wire cut UI (Per Part)
-  resolveMinigame: (success: boolean) => void; // Handles the cut result
-  
-  triggerTimeout: () => void;
-  resetGame: () => void;
-  tickTimer: () => void;
-  increasePanic: (amount: number) => void;
-  setKillerArchetype: (type: string) => void;
-  logEvidence: () => void;
-  logMistake: () => void;
-  captureSuspect: () => void;
+interface FeedMessage {
+  id: number;
+  source: 'SYSTEM' | 'ANALYSIS' | 'VOICE' | 'ERROR';
+  text: string;
+  meta?: string;
 }
 
-const BASE_TIME = 30;
-const MIN_TIME = 10;
-const INITIAL_BOMB_TIME = 15; 
+// --- NEW: Detailed Evidence Item ---
+export interface EvidenceItem {
+    id: string;
+    texture: string;
+    quality: 'CRIME' | 'HERRING' | 'AMBIANCE' | string;
+    timestamp: number;
+}
 
-export const useGameStore = create<GameStore>()(
-  persist(
-    (set, get) => ({
-      gameState: 'IDLE',
-      score: 0,
-      highScore: 0, 
-      level: 1,
-      timeLeft: BASE_TIME,
-      bombTimer: INITIAL_BOMB_TIME,
-      panicLevel: 0,
-      resetCount: 0,
-      debugMode: false,
-      scanLog: 'Reviewing Tape #04...',
-      killerArchetype: null,
-      bombArchetype: null, // Init
-      evidenceCount: 0,
-      mistakeCount: 0,
-      bombPartsFound: 0, 
-      gameOverReason: null,
+interface GameStateData {
+  // Core State
+  gameState: GameState;
+  level: number;
+  debugMode: boolean;
+  
+  // Metrics
+  victimCount: number;      
+  convictionScore: number; 
+  killerArchetype: string;  
+  
+  activeScenario: ScenarioType | null;
+  scenarioTimer: number;
+  feed: FeedMessage[];
 
-      setScanLog: (log) => set({ scanLog: log }),
+  // --- UPDATED: Evidence Bag holds Objects now ---
+  evidenceBag: EvidenceItem[]; 
 
-      startGame: () => set({ 
+  // Actions
+  startGame: () => void;
+  setKillerArchetype: (type: string) => void;
+  postFeed: (source: FeedMessage['source'], text: string, meta?: string) => void;
+  toggleDebug: () => void;
+  tickTimer: () => void;
+  
+  // Updated Signature
+  logEvidence: (id: string, texture: string, quality: string) => void; 
+  
+  triggerConfrontation: () => void;    
+  resolveConfrontation: (choice: 'ARREST' | 'SAVE') => void;
+  failScenario: (deaths: number) => void;
+  completeLevel: (escaped: boolean) => void; 
+  nextLevel: () => void;
+}
+
+export const useGameStore = create<GameStateData>((set, get) => ({
+  gameState: 'IDLE',
+  level: 1,
+  debugMode: false,
+  victimCount: 0,
+  convictionScore: 15, 
+  killerArchetype: 'unknown',
+  activeScenario: null,
+  scenarioTimer: 0,
+  feed: [],
+  evidenceBag: [], 
+
+  startGame: () => {
+    // Post initial message *before* changing state
+    get().postFeed('SYSTEM', 'CONNECTION ESTABLISHED. BEGIN SCAN.', 'INIT');
+    set({ 
         gameState: 'PLAYING', 
-        timeLeft: BASE_TIME, 
-        panicLevel: 10,
-        evidenceCount: 0,
-        mistakeCount: 0,
-        bombPartsFound: 0,
-        gameOverReason: null
-      }),
+        convictionScore: 15, 
+        activeScenario: null,
+        evidenceBag: [], // Reset bag on new game
+        // Don't reset feed here, so we can see the init message
+    });
+  },
 
-      nextLevel: () => set((state) => {
-        const newTime = Math.max(MIN_TIME, BASE_TIME - (state.level * 2));
-        return {
-            gameState: 'IDLE',
-            level: state.level + 1,
-            timeLeft: newTime,
-            bombTimer: INITIAL_BOMB_TIME,
-            panicLevel: 0,
-            resetCount: state.resetCount + 1,
-            scanLog: `CASE FILE #${state.level + 1} LOADED.`,
-            killerArchetype: null,
-            bombArchetype: null,
-            evidenceCount: 0, 
-            mistakeCount: 0,
-            bombPartsFound: 0,
-            gameOverReason: null
-        };
-      }),
+  setKillerArchetype: (type) => set({ killerArchetype: type }),
 
-      setKillerArchetype: (type) => set((state) => {
-          let arch: 'planner' | 'chaotic' | 'cleaner' = 'chaotic';
-          
-          // LOGIC MAPPING: Visuals -> Psychology
-          const chaoticList = ['human_punk', 'clown', 'kid_balloon', 'artist', 'glutton', 'guitarist'];
-          const plannerList = ['human_suit', 'human_elder', 'commuter', 'tourist', 'cyclist'];
-          const cleanerList = ['gardener', 'bodybuilder', 'hipster', 'goth'];
+  postFeed: (source, text, meta) => set((state) => ({
+    feed: [...state.feed.slice(-4), { id: Date.now(), source, text, meta }]
+  })),
 
-          if (plannerList.some(k => type.includes(k))) arch = 'planner';
-          else if (cleanerList.some(k => type.includes(k))) arch = 'cleaner';
-          
-          return { killerArchetype: type, bombArchetype: arch };
-      }),
+  toggleDebug: () => set((state) => ({ debugMode: !state.debugMode })),
 
-      logEvidence: () => set((state) => ({ evidenceCount: state.evidenceCount + 1 })),
-      logMistake: () => set((state) => ({ mistakeCount: state.mistakeCount + 1 })),
-
-      foundKiller: () => set((state) => ({ gameState: 'FOUND', panicLevel: 0 })),
-      
-      captureSuspect: () => set({ 
-        gameState: 'GAME_OVER', 
-        gameOverReason: 'CAPTURE',
-        panicLevel: 0,
-        scanLog: "SUSPECT IN CUSTODY. CASE CLOSED?"
-      }),
-
-      // --- BOMB LOGIC START ---
-
-      // 1. Enter the Scavenger Hunt
-      triggerBombPhase: () => set({ 
-        gameState: 'BOMB_SEARCH', 
-        bombTimer: INITIAL_BOMB_TIME, 
-        panicLevel: 50,
-        bombPartsFound: 0,
-        scanLog: "WARNING: IED DETECTED. LOCATE COMPONENTS."
-      }),
-
-      // 2. Clicked a Part -> Trigger Minigame
-      startDefusal: () => set({ 
-          gameState: 'MINIGAME', 
-          scanLog: "TAMPER PROTECTION DETECTED. BYPASS REQUIRED.",
-          panicLevel: 80 
-      }),
-
-      // 3. Resolve the Wire Cut
-      resolveMinigame: (success) => set((state) => {
-        if (success) {
-            const newCount = state.bombPartsFound + 1;
-            
-            // Check Victory Condition (Target: 3)
-            if (newCount >= 3) {
-                const roundScore = (state.bombTimer * 100) + (state.evidenceCount * 250);
-                const newTotalScore = state.score + Math.max(0, roundScore);
-                const newHighScore = newTotalScore > state.highScore ? newTotalScore : state.highScore;
-
-                return {
-                    bombPartsFound: newCount,
-                    gameState: 'VICTORY',
-                    score: newTotalScore,
-                    highScore: newHighScore,
-                    panicLevel: 0,
-                    scanLog: "ALL COMPONENTS NEUTRALIZED. THREAT ENDED."
-                };
-            }
-            
-            // Resume Search
-            return { 
-                bombPartsFound: newCount, 
-                gameState: 'BOMB_SEARCH', 
-                scanLog: `MODULE BYPASSED. RESUME SEARCH (${newCount}/3).`,
-                panicLevel: 50,
-                bombTimer: state.bombTimer + 5 // Bonus time for successful cut
-            };
-        } else {
-            // Cut Wrong Wire
-            return { gameState: 'GAME_OVER', gameOverReason: 'BOMB', panicLevel: 100 };
-        }
-      }),
-
-      // --- BOMB LOGIC END ---
-
-      triggerTimeout: () => set({ gameState: 'TIMEOUT', gameOverReason: 'TIMEOUT', panicLevel: 100 }),
-
-      resetGame: () => set((state) => ({ 
-        gameState: 'IDLE', 
-        score: 0, 
-        level: 1, 
-        timeLeft: BASE_TIME, 
-        bombTimer: INITIAL_BOMB_TIME,
-        panicLevel: 0,
-        resetCount: state.resetCount + 1,
-        scanLog: 'Reviewing Tape #04...',
-        killerArchetype: null,
-        bombArchetype: null,
-        evidenceCount: 0,
-        mistakeCount: 0,
-        bombPartsFound: 0,
-        gameOverReason: null
-      })),
-
-      tickTimer: () => set((state) => {
-        if (state.gameState === 'PLAYING') {
-          if (state.timeLeft <= 0) return { gameState: 'TIMEOUT', gameOverReason: 'TIMEOUT', panicLevel: 100 };
-          return { timeLeft: state.timeLeft - 1 };
-        }
-        // Timer ticks for both Search and Minigame phases
-        if (state.gameState === 'MINIGAME' || state.gameState === 'BOMB_SEARCH') {
-          if (state.bombTimer <= 0) return { gameState: 'GAME_OVER', gameOverReason: 'BOMB', panicLevel: 100 };
-          // Using -1 for consistent seconds (unless you prefer the fast decimal tick)
-          return { bombTimer: state.bombTimer - 1, panicLevel: Math.min(100, state.panicLevel + 5) };
-        }
-        return {};
-      }),
-
-      increasePanic: (amount) => set((state) => ({ panicLevel: Math.min(100, state.panicLevel + amount) })),
-      toggleDebug: () => set((state) => ({ debugMode: !state.debugMode })), 
-    }),
-    {
-      name: 'weriswarlot-storage', 
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ highScore: state.highScore }), 
+  tickTimer: () => set((state) => {
+    if (state.gameState === 'SCENARIO_ACTIVE' && state.scenarioTimer > 0) {
+       return { scenarioTimer: state.scenarioTimer - 1 };
     }
-  )
-);
+    return {};
+  }),
+
+  // --- UPDATED LOGIC ---
+  logEvidence: (id, texture, quality) => {
+    const { convictionScore, evidenceBag } = get();
+
+    if (evidenceBag.find(e => e.id === id)) return;
+    
+    if (evidenceBag.length >= 5) {
+        get().postFeed('SYSTEM', 'EVIDENCE BAG FULL.', 'ERROR');
+        return;
+    }
+
+    let scoreChange = 0;
+    let msg = '';
+    let type: FeedMessage['source'] = 'ANALYSIS';
+
+    if (quality === 'CRIME') {
+        scoreChange = 20;
+        msg = 'SOLID EVIDENCE. Case strength increased.';
+        type = 'ANALYSIS';
+    } else if (quality === 'HERRING') {
+        scoreChange = -10;
+        msg = 'USELESS JUNK. The DA will not like this.';
+        type = 'ERROR';
+    } else {
+        msg = 'Clutter logged.';
+    }
+
+    const newScore = Math.max(0, Math.min(100, convictionScore + scoreChange));
+
+    set({ 
+        convictionScore: newScore,
+        evidenceBag: [...evidenceBag, { id, texture, quality, timestamp: Date.now() }]
+    });
+
+    get().postFeed(type, `${msg} (${newScore}%)`);
+  },
+
+  triggerConfrontation: () => {
+    const { convictionScore } = get();
+    if (convictionScore < 70) {
+        get().postFeed('SYSTEM', `CASE TOO WEAK (${convictionScore}%). CANNOT ARREST.`, 'ERROR');
+        return;
+    }
+    const scenarios: ScenarioType[] = ['BOMB', 'EVIDENCE', 'POISON', 'ACCOMPLICE'];
+    set({ 
+        gameState: 'CONFRONTATION', 
+        activeScenario: scenarios[Math.floor(Math.random() * scenarios.length)] 
+    });
+  },
+
+  resolveConfrontation: (choice) => {
+    const { activeScenario, convictionScore } = get();
+    if (choice === 'ARREST') {
+        const roll = Math.random() * 100;
+        if (roll < convictionScore) {
+            const deaths = activeScenario === 'BOMB' ? 5 : activeScenario === 'POISON' ? 3 : 1;
+            set((state) => ({ gameState: 'LEVEL_COMPLETE', victimCount: state.victimCount + deaths, activeScenario: null }));
+        } else {
+            get().failScenario(0); 
+        }
+    } else {
+        set({ gameState: 'SCENARIO_ACTIVE', scenarioTimer: 30 });
+        get().postFeed('SYSTEM', 'PROTOCOL: MERCY. INITIATE RESCUE.', 'TIMER_START');
+    }
+  },
+
+  failScenario: (deaths) => set((state) => ({ gameState: 'GAME_OVER', victimCount: state.victimCount + deaths })),
+  completeLevel: (escaped) => set((state) => ({ gameState: 'LEVEL_COMPLETE', victimCount: state.victimCount + (escaped ? 2 : 0) })),
+  nextLevel: () => set((state) => ({
+      level: state.level + 1, gameState: 'IDLE', convictionScore: 15, activeScenario: null, evidenceBag: [], 
+      feed: [{ id: Date.now(), source: 'SYSTEM', text: `CASE FILE ${state.level + 1} OPENED.`, meta: 'INIT' }]
+  }))
+}));

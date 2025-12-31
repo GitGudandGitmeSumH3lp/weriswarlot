@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   --foreground-rgb: 0, 0, 0;
@@ -10,6 +8,12 @@
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: black; /* Horror theme default */
-  overflow: hidden; /* Prevent scrolling while playing */
+  background: #000;
+  overflow: hidden;
+}
+
+@media (orientation: portrait) {
+  .portrait-warning {
+    display: flex !important;
+  }
 }
