@@ -1,91 +1,193 @@
 // --- FILE: components/ui/GameHUD.tsx ---
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore, EvidenceItem } from '@/store/gameStore';
 
 const FeedLog = () => {
     const feed = useGameStore(s => s.feed);
+    const [isExpanded, setIsExpanded] = useState(false);
+    
     return (
-        <div className="absolute top-4 left-4 w-80 font-mono text-sm pointer-events-none">
-            {feed.map((msg, i) => (
-                <div key={msg.id} 
-                    className={`mb-1 p-1 rounded backdrop-blur-sm border-l-2 transition-opacity duration-500
-                    ${i === 0 ? 'opacity-100' : 'opacity-60'}
-                    ${msg.source === 'ERROR' ? 'bg-red-900/40 border-red-500 text-red-100' : 
-                      msg.source === 'ANALYSIS' ? 'bg-amber-900/40 border-amber-500 text-amber-100' : 
-                      msg.source === 'VOICE' ? 'bg-cyan-900/40 border-cyan-500 text-cyan-100' : 
-                      'bg-slate-900/40 border-slate-500 text-slate-100'}`}
-                >
-                    <span className="font-bold opacity-75 mr-2">[{msg.source}]</span>
-                    {msg.text}
-                </div>
-            ))}
+        <div 
+            className="absolute top-2 left-2 w-64 font-mono text-xs transition-all duration-300 pointer-events-auto"
+            onMouseEnter={() => setIsExpanded(true)}
+            onMouseLeave={() => setIsExpanded(false)}
+        >
+            {/* Peek tab - always visible */}
+            <div className={`mb-1 px-2 py-1 bg-slate-800/60 border-l-4 border-slate-400 rounded cursor-pointer transition-all ${
+                isExpanded ? 'opacity-100' : 'opacity-40 hover:opacity-70'
+            }`}>
+                <span className="font-bold">📋 LOG</span>
+                {!isExpanded && feed.length > 0 && <span className="ml-2 text-[10px] opacity-60">({feed.length})</span>}
+            </div>
+            
+            {/* Expandable messages */}
+            <div className={`transition-all duration-300 overflow-hidden ${
+                isExpanded ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
+            }`}>
+                {feed.slice(0, 3).map((msg, i) => (
+                    <div key={msg.id} 
+                        className={`mb-1 px-2 py-1 rounded border-l-4 transition-opacity duration-300
+                        ${msg.source === 'ERROR' ? 'bg-red-900/70 border-red-400 text-red-100' : 
+                          msg.source === 'ANALYSIS' ? 'bg-amber-900/70 border-amber-400 text-amber-100' : 
+                          msg.source === 'VOICE' ? 'bg-cyan-900/70 border-cyan-400 text-cyan-100' : 
+                          'bg-slate-900/70 border-slate-400 text-slate-100'}`}
+                    >
+                        <span className="font-bold mr-1">[{msg.source}]</span>
+                        <span className="opacity-90">{msg.text}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
 
 const ProbabilityMeter = () => {
     const score = useGameStore(s => s.convictionScore);
-    let colorClass = 'bg-slate-500';
-    if (score > 30) colorClass = 'bg-yellow-500';
-    if (score >= 70) colorClass = 'bg-green-500 animate-pulse';
-
+    const [isExpanded, setIsExpanded] = useState(false);
+    
     return (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-96 pointer-events-none">
-            <div className="flex justify-between text-xs text-white font-bold mb-1 tracking-widest bg-black/50 px-2 rounded">
-                <span>INSUFFICIENT</span>
-                <span>BUILDING...</span>
-                <span className={score >= 70 ? 'text-green-400' : 'text-slate-500'}>WARRANT AUTHORIZED</span>
+        <div 
+            className="absolute top-2 right-2 transition-all duration-300 pointer-events-auto"
+            onMouseEnter={() => setIsExpanded(true)}
+            onMouseLeave={() => setIsExpanded(false)}
+        >
+            <div className={`bg-slate-900/80 rounded border-2 border-slate-600 transition-all ${
+                isExpanded ? 'p-2 w-48 opacity-100' : 'p-1 w-20 opacity-40 hover:opacity-70'
+            }`}>
+                <div className={`text-[10px] font-bold text-white text-center mb-1 tracking-wide transition-all ${
+                    isExpanded ? 'opacity-100' : 'opacity-0'
+                }`}>
+                    CONVICTION: {score}%
+                </div>
+                
+                {/* Always show score number when collapsed */}
+                {!isExpanded && (
+                    <div className="text-center text-white font-bold text-xs">
+                        {score}%
+                    </div>
+                )}
+                
+                {/* Progress bar - only when expanded */}
+                <div className={`transition-all duration-300 overflow-hidden ${
+                    isExpanded ? 'h-3 opacity-100' : 'h-0 opacity-0'
+                }`}>
+                    <div className="h-3 bg-slate-950 rounded-sm border border-slate-700 overflow-hidden">
+                        <div 
+                            className={`h-full transition-all duration-500 ${
+                                score >= 70 ? 'bg-green-500' :
+                                score > 30 ? 'bg-yellow-500' : 'bg-slate-500'
+                            }`}
+                            style={{ width: `${score}%` }}
+                        />
+                    </div>
+                </div>
             </div>
-            <div className="h-4 w-full bg-slate-900/80 rounded-sm border border-slate-700 overflow-hidden">
-                <div className={`h-full transition-all duration-700 ease-out ${colorClass}`} style={{ width: `${score}%` }} />
-            </div>
-            <div className="text-center text-white font-mono text-xl mt-1 drop-shadow-md">{score}% PROBABILITY</div>
         </div>
     );
 };
 
 const EvidenceTray = () => {
     const bag = useGameStore(s => s.evidenceBag);
+    const [isExpanded, setIsExpanded] = useState(false);
+    
     const renderSlot = (index: number) => {
         const item = bag[index];
-        if (!item) return <div key={index} className="w-16 h-16 bg-slate-900/60 border border-slate-700 rounded flex items-center justify-center opacity-50"><span className="text-slate-600 text-2xl">+</span></div>;
+        
+        if (!item) {
+            return (
+                <div key={index} className="w-12 h-12 bg-slate-900/60 border border-slate-600 rounded flex items-center justify-center">
+                    <span className="text-slate-500 text-lg">+</span>
+                </div>
+            );
+        }
+        
         const isHerring = item.quality === 'HERRING';
+        
         return (
-            <div key={item.id} className="relative w-16 h-16 bg-slate-800/90 border border-slate-500 rounded flex flex-col items-center justify-center p-1 group">
-                <div className="text-[10px] text-slate-400 uppercase truncate w-full text-center">{item.texture.replace('_', ' ')}</div>
-                <div className="text-2xl">📦</div>
-                {isHerring && <div className="absolute inset-0 flex items-center justify-center bg-red-900/60"><span className="text-red-500 font-black border-2 border-red-500 px-1 -rotate-12 text-xs">REJECTED</span></div>}
+            <div key={item.id} className={`relative w-12 h-12 rounded border-2 flex items-center justify-center ${
+                isHerring ? 'bg-red-900/80 border-red-500' : 'bg-amber-800/80 border-amber-500'
+            }`}>
+                <div className="text-xl">📦</div>
+                {isHerring && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <span className="text-red-400 font-black text-[8px] border border-red-400 px-1 rotate-[-15deg]">
+                            ✗
+                        </span>
+                    </div>
+                )}
             </div>
         );
     };
-    return <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 pointer-events-auto">{[0, 1, 2, 3, 4].map(renderSlot)}</div>;
+    
+    const itemCount = bag.filter(Boolean).length;
+    
+    return (
+        <div 
+            className="absolute bottom-2 left-2 pointer-events-auto transition-all duration-300"
+            onMouseEnter={() => setIsExpanded(true)}
+            onMouseLeave={() => setIsExpanded(false)}
+        >
+            <div className={`bg-slate-900/80 rounded border-2 border-slate-600 p-2 transition-all ${
+                isExpanded ? 'opacity-100' : 'opacity-40 hover:opacity-70'
+            }`}>
+                <div className="text-[9px] font-bold text-slate-300 text-center mb-1">
+                    EVIDENCE {!isExpanded && `(${itemCount}/5)`}
+                </div>
+                <div className={`flex gap-1 transition-all duration-300 overflow-hidden ${
+                    isExpanded ? 'max-w-[260px] opacity-100' : 'max-w-[52px] opacity-0'
+                }`}>
+                    {[0, 1, 2, 3, 4].map(renderSlot)}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 const ActionPanel = () => {
     const { convictionScore, triggerConfrontation } = useGameStore();
     const canArrest = convictionScore >= 70;
+    const [isHovered, setIsHovered] = useState(false);
+    
     return (
-        <div className="absolute bottom-4 right-4 pointer-events-auto">
+        <div 
+            className="absolute bottom-2 right-2 pointer-events-auto"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
             <button
                 onClick={triggerConfrontation}
                 disabled={!canArrest}
-                className={`px-6 py-4 font-bold text-lg tracking-widest border-2 transition-all ${canArrest ? 'bg-red-600 border-red-400 text-white hover:bg-red-500 shadow-[0_0_15px_rgba(220,38,38,0.7)]' : 'bg-slate-800 border-slate-600 text-slate-500 cursor-not-allowed'}`}
-            >{canArrest ? 'EXECUTE WARRANT' : 'EVIDENCE REQUIRED'}</button>
+                className={`px-4 py-2 font-bold text-sm border-2 rounded transition-all ${
+                    canArrest 
+                        ? 'bg-red-600 border-red-400 text-white hover:bg-red-500' 
+                        : 'bg-slate-800 border-slate-600 text-slate-500 cursor-not-allowed'
+                } ${isHovered || canArrest ? 'opacity-100' : 'opacity-40 hover:opacity-70'}`}
+            >
+                {canArrest ? '⚡ ARREST' : '🔒 LOCKED'}
+            </button>
         </div>
     );
 };
 
 const StartScreen = () => {
     const startGame = useGameStore(s => s.startGame);
+    
     return (
-        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-50 pointer-events-auto">
-            <h1 className="text-5xl font-black text-white tracking-widest drop-shadow-lg">WERISWARLOT</h1>
-            <h2 className="text-lg text-slate-400 font-mono mb-8">Forensic Simulation v4.4</h2>
-            <button
-                onClick={startGame}
-                className="px-8 py-4 bg-green-600 text-white font-bold text-2xl tracking-widest border-2 border-green-400 hover:bg-green-500 shadow-[0_0_25px_rgba(34,197,94,0.7)] transition-all"
-            >BEGIN SIMULATION</button>
+        <div className="absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center z-50 pointer-events-auto">
+            <div className="text-center">
+                <h1 className="text-4xl font-black text-amber-400 tracking-widest mb-1">
+                    WERISWARLOT
+                </h1>
+                <p className="text-xs text-slate-400 font-mono mb-6">Forensic Simulation v4.4</p>
+                
+                <button
+                    onClick={startGame}
+                    className="px-6 py-3 bg-green-600 text-white font-bold text-lg border-2 border-green-400 rounded hover:bg-green-500 transition-all"
+                >
+                    ▶ START
+                </button>
+            </div>
         </div>
     );
 };

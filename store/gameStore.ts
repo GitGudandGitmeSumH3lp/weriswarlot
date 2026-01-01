@@ -1,6 +1,8 @@
 // --- FILE: store/gameStore.ts ---
 
 import { create } from 'zustand';
+import { getKillerProfile } from '@/data/KillerRegistry';
+import { rng } from '@/utils/rng';
 
 export type GameState = 'IDLE' | 'PLAYING' | 'FOUND' | 'CONFRONTATION' | 'SCENARIO_ACTIVE' | 'GAME_OVER' | 'LEVEL_COMPLETE';
 export type ScenarioType = 'BOMB' | 'EVIDENCE' | 'POISON' | 'ACCOMPLICE';
@@ -34,10 +36,15 @@ interface GameStateData {
   activeScenario: ScenarioType | null;
   scenarioTimer: number;
   feed: FeedMessage[];
-
   // --- UPDATED: Evidence Bag holds Objects now ---
   evidenceBag: EvidenceItem[]; 
 
+  killerActionTimer: number;
+  killerHeat: number;
+  pendingVignetteSpawn: { vignetteId: string; dangerZone: any } | null; // The event trigger
+
+
+  
   // Actions
   startGame: () => void;
   setKillerArchetype: (type: string) => void;
@@ -53,6 +60,9 @@ interface GameStateData {
   failScenario: (deaths: number) => void;
   completeLevel: (escaped: boolean) => void; 
   nextLevel: () => void;
+  tickKillerTimer: (cooldown: number) => void; // Accepts cooldown from profile
+  clearVignetteSpawn: () => void;
+  // No action for heat, it's set internally
 }
 
 export const useGameStore = create<GameStateData>((set, get) => ({
@@ -65,17 +75,22 @@ export const useGameStore = create<GameStateData>((set, get) => ({
   activeScenario: null,
   scenarioTimer: 0,
   feed: [],
-  evidenceBag: [], 
+  evidenceBag: [],
+  killerActionTimer: 60, // Initial delay before first action
+  killerHeat: 0,
+  pendingVignetteSpawn: null,
 
+  // Update startGame to reset killer state
   startGame: () => {
-    // Post initial message *before* changing state
     get().postFeed('SYSTEM', 'CONNECTION ESTABLISHED. BEGIN SCAN.', 'INIT');
     set({ 
         gameState: 'PLAYING', 
         convictionScore: 15, 
         activeScenario: null,
-        evidenceBag: [], // Reset bag on new game
-        // Don't reset feed here, so we can see the init message
+        evidenceBag: [],
+        killerActionTimer: 60, // Reset timer
+        killerHeat: 0,         // Reset heat
+        pendingVignetteSpawn: null
     });
   },
 
@@ -159,11 +174,33 @@ export const useGameStore = create<GameStateData>((set, get) => ({
         get().postFeed('SYSTEM', 'PROTOCOL: MERCY. INITIATE RESCUE.', 'TIMER_START');
     }
   },
-
-  failScenario: (deaths) => set((state) => ({ gameState: 'GAME_OVER', victimCount: state.victimCount + deaths })),
+  
+ failScenario: (deaths) => set((state) => ({ gameState: 'GAME_OVER', victimCount: state.victimCount + deaths })),
   completeLevel: (escaped) => set((state) => ({ gameState: 'LEVEL_COMPLETE', victimCount: state.victimCount + (escaped ? 2 : 0) })),
   nextLevel: () => set((state) => ({
       level: state.level + 1, gameState: 'IDLE', convictionScore: 15, activeScenario: null, evidenceBag: [], 
       feed: [{ id: Date.now(), source: 'SYSTEM', text: `CASE FILE ${state.level + 1} OPENED.`, meta: 'INIT' }]
-  }))
+  })),
+
+    // --- KILLER SYSTEM ACTIONS ---
+  tickKillerTimer: (cooldown) => set((state) => {
+    if (state.gameState !== 'PLAYING') return {};
+
+    if (state.killerActionTimer > 0) {
+      return { killerActionTimer: state.killerActionTimer - 1 };
+    } else {
+      const profile = getKillerProfile(get().killerArchetype);
+      const crimeToCommit = rng.pick(profile.crimeVignettes);
+      
+      get().postFeed('SYSTEM', `ANOMALOUS ENERGY: ${crimeToCommit}`, 'WARNING');
+      
+      return {
+        killerActionTimer: profile.actionCooldown,
+        killerHeat: Math.min(100, state.killerHeat + profile.heatIncrease),
+        pendingVignetteSpawn: { vignetteId: crimeToCommit, dangerZone: null } 
+      };
+    }
+  }),
+
+  clearVignetteSpawn: () => set({ pendingVignetteSpawn: null }) // Implementation
 }));
