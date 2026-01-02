@@ -11,6 +11,11 @@
    *   Killer-specific vignettes must be registered in `KillerRegistry.ts`.
 3. **Z-Sorting:** Actors must use `zIndex: y` in the `SceneLayer` loop to ensure proper 2.5D overlapping.
 
+## Interaction Rules (v4.6.0)
+1. **Event Listeners:** Always use `onPointerDown` (camelCase) for Pixi components to ensure compatibility with v8 event managers.
+2. **Mugshot Centering:** When rendering a character in a UI canvas (200x200), use `scale(4)`, `x(35)`, and `y(5)` to center the standard 32x48 sprite.
+3. **Witness Logic:** Witness checks must be performed in `World.tsx` immediately before the `pendingVignetteSpawn` state is cleared to ensure data synchronization.
+
 ## Build Constraints
 *   **Next.js:** 15.1.3 (Stable).
 *   **React:** 19.0.0 (Stable).

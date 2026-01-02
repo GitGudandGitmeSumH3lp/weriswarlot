@@ -30,7 +30,9 @@ export const World = () => {
     gameState, 
     setKillerArchetype, 
     pendingVignetteSpawn,
-    clearVignetteSpawn
+    clearVignetteSpawn,
+    pendingCrisisInit, // NEW
+    clearCrisisInit    // NEW
   } = useGameStore();
 
   // 1. Initial World Generation
@@ -82,13 +84,57 @@ export const World = () => {
     }
   }, [pendingVignetteSpawn, layout, clearVignetteSpawn]);
 
-  // 3. Texture Registry
+  // 3. Handle Crisis Events (BOMB / POISON Spawn)
+  useEffect(() => {
+    if (pendingCrisisInit && layout) {
+      // Find a spot near the player (center of map roughly, or use camera logic if we had it)
+      // For now, we spawn it near a random Safe Zone to ensure it's reachable.
+      const spawnCenter = rng.pick(layout.spawns.safe);
+      const newProps: Entity[] = [];
+      const timestamp = Date.now();
+
+      if (pendingCrisisInit.type === 'BOMB') {
+        // Spawn 1 Bomb
+        newProps.push({
+          id: `crisis_bomb_${timestamp}`,
+          type: 'prop',
+          textureKey: 'prop_bomb',
+          x: spawnCenter.x,
+          y: spawnCenter.y,
+          quality: 'CRIME' // Reusing quality tag logic
+        });
+      } else if (pendingCrisisInit.type === 'POISON') {
+        // Spawn 3 Bottles (Red, Blue, Green)
+        // We scatter them slightly
+        [0, 1, 2].forEach((variant, i) => {
+            newProps.push({
+                id: `crisis_bottle_${timestamp}_${i}`,
+                type: 'prop',
+                textureKey: `prop_bottle_${variant}`, // Relies on propPainters having this logic or us adding it to registry logic
+                x: spawnCenter.x + rng.float(-40, 40),
+                y: spawnCenter.y + rng.float(-40, 40),
+                quality: 'CRIME'
+            });
+        });
+      }
+
+      // Inject into world
+      setDecals(prev => [...prev, ...newProps]);
+      clearCrisisInit();
+    }
+  }, [pendingCrisisInit, layout, clearCrisisInit]);
+
+  // Texture Registry
   const textureRegistry = useMemo(() => {
     const registry: Record<string, (g: Graphics) => void> = { ...propPainters };
     registry['tree'] = propPainters.stardew_tree;
     registry['bush'] = propPainters.trashcan;
     registry['statue'] = propPainters.lamppost;
     registry['bench'] = propPainters.bench;
+    // NEW: Hydrate Bottle Variants (0=Red, 1=Blue, 2=Green)
+    for (let i = 0; i < 3; i++) {
+        registry[`prop_bottle_${i}`] = (g: Graphics) => propPainters.prop_bottle(g, i);
+    }
     Object.entries(painters).forEach(([baseKey, paintFn]) => {
       registry[baseKey] = (g) => paintFn(g, 0);
       for (let i = 0; i <= 5; i++) {

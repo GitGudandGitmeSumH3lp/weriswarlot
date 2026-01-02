@@ -290,6 +290,36 @@ export const propPainters = {
         drawPixelRect(g, 0x000000, -2, -5, 4, 10); // Question mark ish
         drawPixelRect(g, 0x000000, -2, 6, 4, 2);
     },
+
+    // --- CRISIS PROPS ---
+    prop_bomb: (g: Graphics) => {
+        // Main Casing
+        drawPixelRect(g, 0x212121, -12, -10, 24, 20); 
+        // Timer Screen (Red glow)
+        drawPixelRect(g, 0x000000, -8, -6, 16, 8); 
+        drawPixelRect(g, 0xFF0000, -5, -4, 10, 4); 
+        // Wires (Red, Green, Blue hints)
+        drawPixelRect(g, 0xF44336, -10, 4, 4, 4); // Red
+        drawPixelRect(g, 0x4CAF50, -2, 4, 4, 4);  // Green
+        drawPixelRect(g, 0x2196F3, 6, 4, 4, 4);   // Blue
+    },
+
+    prop_bottle: (g: Graphics, variant: number = 0) => {
+        // Variant 0=Red, 1=Blue, 2=Green (mapped to index)
+        const colors = [0xF44336, 0x2196F3, 0x4CAF50];
+        const color = colors[variant % colors.length];
+
+        // Bottle Neck
+        drawPixelRect(g, 0xFFFFFF, -3, -14, 6, 6);
+        // Bottle Body
+        g.beginFill(0xFFFFFF, 0.4); // Glass
+        g.drawRect(-6, -8, 12, 16);
+        g.endFill();
+        // Liquid
+        g.beginFill(color, 0.8);
+        g.drawRect(-5, -4, 10, 11);
+        g.endFill();
+    },
     
 };
 

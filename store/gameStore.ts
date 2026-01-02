@@ -46,6 +46,11 @@ interface GameStateData {
   // NEW: Interrogation State
   isInterrogating: boolean;
   interrogationTarget: Entity | null;
+  // NEW: Crisis State
+  crisisSolution: string | null; // e.g., 'RED', 'BLUE', 'GREEN'
+  crisisInteractTarget: string | null; // ID of the bomb being defused
+  pendingCrisisInit: { type: 'BOMB' | 'POISON', loc: {x:number, y:number} } | null;
+  
 
   
   // Actions
@@ -54,6 +59,8 @@ interface GameStateData {
   postFeed: (source: FeedMessage['source'], text: string, meta?: string) => void;
   toggleDebug: () => void;
   tickTimer: () => void;
+    // Add this new action:
+  clearCrisisInit: () => void;
   
   // Updated Signature
   logEvidence: (id: string, texture: string, quality: string) => void; 
@@ -69,6 +76,14 @@ interface GameStateData {
   // NEW: Interrogation Actions
   startInterrogation: (target: Entity) => void;
   endInterrogation: () => void;
+  // NEW: Crisis Actions
+  setCrisisInteraction: (targetId: string | null) => void;
+  resolveCrisis: (success: boolean) => void;
+  // NEW: Debug Actions
+  debugSetScore: (val: number) => void;
+  debugSetHeat: (val: number) => void;
+  debugTriggerKiller: () => void;
+  
 }
 
 export const useGameStore = create<GameStateData>((set, get) => ({
@@ -87,6 +102,9 @@ export const useGameStore = create<GameStateData>((set, get) => ({
   pendingVignetteSpawn: null,
   isInterrogating: false,
   interrogationTarget: null,
+  crisisSolution: null,
+  crisisInteractTarget: null,
+  pendingCrisisInit: null,
 
   // Update startGame to reset killer state
   startGame: () => {
@@ -116,6 +134,17 @@ export const useGameStore = create<GameStateData>((set, get) => ({
     }
     return {};
   }),
+  
+ // New Action
+  clearCrisisInit: () => set({ pendingCrisisInit: null }),
+  
+  // Debug Implementations
+  debugSetScore: (val) => set({ convictionScore: val }),
+  
+  debugSetHeat: (val) => set({ killerHeat: val }),
+  
+  debugTriggerKiller: () => set({ killerActionTimer: 1 }), // Force trigger next tick
+
 
   startInterrogation: (target) => set({ 
       isInterrogating: true, 
@@ -178,28 +207,57 @@ export const useGameStore = create<GameStateData>((set, get) => ({
     });
   },
 
+  // MODIFIED: Resolve Confrontation now sets up the crisis
   resolveConfrontation: (choice) => {
     const { activeScenario, convictionScore } = get();
+    
     if (choice === 'ARREST') {
+        // ... existing arrest logic ...
         const roll = Math.random() * 100;
         if (roll < convictionScore) {
-            const deaths = activeScenario === 'BOMB' ? 5 : activeScenario === 'POISON' ? 3 : 1;
-            set((state) => ({ gameState: 'LEVEL_COMPLETE', victimCount: state.victimCount + deaths, activeScenario: null }));
+             const deaths = activeScenario === 'BOMB' ? 5 : activeScenario === 'POISON' ? 3 : 1;
+             set((state) => ({ gameState: 'LEVEL_COMPLETE', victimCount: state.victimCount + deaths, activeScenario: null }));
         } else {
-            get().failScenario(0); 
+             get().failScenario(0);
         }
     } else {
-        set({ gameState: 'SCENARIO_ACTIVE', scenarioTimer: 30 });
-        get().postFeed('SYSTEM', 'PROTOCOL: MERCY. INITIATE RESCUE.', 'TIMER_START');
+        // MERCY PATH -> TRIGGER CRISIS
+        const scenario = activeScenario === 'POISON' ? 'POISON' : 'BOMB'; // Default to Bomb for now
+        const solution = rng.pick(['RED', 'BLUE', 'GREEN']); // Simple color puzzle
+        
+        // Find a spawn location (Logic handled in World.tsx via flag, but we pass the intent)
+        // We set a flag so World.tsx knows to spawn the props next frame
+        set({ 
+            gameState: 'SCENARIO_ACTIVE', 
+            scenarioTimer: 30, // 30 Seconds to solve!
+            crisisSolution: solution,
+            pendingCrisisInit: { type: scenario, loc: {x:0,y:0} } // Loc placeholder, World will fix
+        });
+        
+        get().postFeed('SYSTEM', `PROTOCOL: MERCY. THREAT LEVEL CRITICAL.`, 'TIMER_START');
     }
   },
+
+  // NEW: Crisis Actions
+  setCrisisInteraction: (targetId) => set({ crisisInteractTarget: targetId }),
   
+  resolveCrisis: (success) => {
+      if (success) {
+          get().completeLevel(true); // Escaped/Saved
+      } else {
+          get().failScenario(5); // Boom
+      }
+      set({ crisisInteractTarget: null, pendingCrisisInit: null });
+  },
+
  failScenario: (deaths) => set((state) => ({ gameState: 'GAME_OVER', victimCount: state.victimCount + deaths })),
   completeLevel: (escaped) => set((state) => ({ gameState: 'LEVEL_COMPLETE', victimCount: state.victimCount + (escaped ? 2 : 0) })),
   nextLevel: () => set((state) => ({
       level: state.level + 1, gameState: 'IDLE', convictionScore: 15, activeScenario: null, evidenceBag: [], 
       feed: [{ id: Date.now(), source: 'SYSTEM', text: `CASE FILE ${state.level + 1} OPENED.`, meta: 'INIT' }]
   })),
+
+ 
 
     // --- KILLER SYSTEM ACTIONS ---
   tickKillerTimer: (cooldown) => set((state) => {

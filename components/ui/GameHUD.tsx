@@ -2,6 +2,9 @@
 import { InterrogationOverlay } from './InterrogationOverlay'; 
 import React, { useState } from 'react';
 import { useGameStore, EvidenceItem } from '@/store/gameStore';
+import { CrisisOverlay } from './CrisisOverlay';
+import { ResultScreen } from './ResultScreen';
+import { DebugDashboard } from './DebugDashboard';
 
 const FeedLog = () => {
     const feed = useGameStore(s => s.feed);
@@ -193,15 +196,20 @@ const StartScreen = () => {
 };
 
 export const GameHUD = () => {
-    const { gameState, isInterrogating } = useGameStore(s => ({ 
+    const { gameState, isInterrogating, debugMode, toggleDebug } = useGameStore(s => ({ 
         gameState: s.gameState, 
-        isInterrogating: s.isInterrogating 
+        isInterrogating: s.isInterrogating,
+        debugMode: s.debugMode,
+        toggleDebug: s.toggleDebug
     }));
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-20">
+            
+            {/* 1. MAIN MENU */}
             {gameState === 'IDLE' && <StartScreen />}
             
+            {/* 2. GAMEPLAY HUD */}
             {(gameState === 'PLAYING' || gameState === 'SCENARIO_ACTIVE') && (
                 <>
                     <ProbabilityMeter />
@@ -210,10 +218,24 @@ export const GameHUD = () => {
                 </>
             )}
             
-            {/* Show Overlay if state is active */}
+            {/* 3. SCENARIO OVERLAYS */}
+            {gameState === 'SCENARIO_ACTIVE' && <CrisisOverlay />}
             {isInterrogating && <InterrogationOverlay />}
+
+            {/* 4. END SCREENS (Highest Z-Index typically, but handled by logic) */}
+            {(gameState === 'LEVEL_COMPLETE' || gameState === 'GAME_OVER') && <ResultScreen />}
             
+            {/* 5. FEED (Always visible) */}
             <FeedLog />
+            {/* DEBUG LAYER */}
+            {debugMode && <DebugDashboard />}
+            
+            {/* Secret Toggle (Bottom Left Corner) */}
+            <div 
+                className="absolute bottom-0 left-0 w-8 h-8 pointer-events-auto cursor-help opacity-0 hover:opacity-50 bg-red-500"
+                onClick={toggleDebug}
+                title="Toggle God Mode"
+            />
         </div>
     );
 };

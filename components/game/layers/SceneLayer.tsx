@@ -6,6 +6,7 @@ import { TILE_SIZE, TileType } from '@/data/Constants';
 import { useKillerSystem } from '@/systems/gameplay/KillerSystem';
 import { useCivilianSystem } from '@/systems/gameplay/CivilianSystem';
 import { CityData } from '@/utils/CityGenerator';
+import { useGameStore } from '@/store/gameStore';
 
 declare global {
   namespace JSX {
@@ -27,6 +28,15 @@ interface SceneLayerProps {
     onInteract: (type: 'actor' | 'decal', item: any) => void;
 }
 
+const drawDebugBox = (g: Graphics) => {
+    g.clear();
+    // In Pixi v8, we can use the traditional way, but let's make it very thick
+    g.setStrokeStyle({ width: 4, color: 0xFF0000, alpha: 1 });
+    // Offset slightly to surround the character (-5, -5) to (40, 55)
+    g.rect(-5, -5, 40, 60);
+    g.stroke();
+};
+
 export const SceneLayer = ({ 
     grid, 
     staticProps, 
@@ -38,7 +48,7 @@ export const SceneLayer = ({
     onInteract 
 }: SceneLayerProps) => {
     const containerRef = useRef<Container>(null);
-
+    const debugMode = useGameStore(s => s.debugMode);
     // 1. Activate Systems
     useKillerSystem(); // The Heartbeat
     useCivilianSystem(actors, setActors, layout); // The Movement
@@ -112,25 +122,33 @@ export const SceneLayer = ({
             {actors.map((actor: any) => {
                 const drawKey = actor.textureKey || actor.type || 'clue_generic';
                 const drawFn = textures[drawKey] || textures[actor.type] || drawFallback;
+                const isKiller = actor.type === 'killer';
+
                 return (
-                    <pixiGraphics
-                        key={actor.id}
-                        label={`actor_${actor.id}`}
-                        draw={drawFn}
-                        x={actor.x}
-                        y={actor.y}
+                    <pixiContainer 
+                        key={actor.id} 
+                        x={actor.x} 
+                        y={actor.y} 
                         zIndex={actor.y}
-                        eventMode="static"
-                        cursor="pointer"
-                        // FIXED: Standardize clickable area (Character is approx 32x48)
-                        // Offset the hitArea to match where the character is drawn
-                        hitArea={new Rectangle(0, 0, 32, 48)} 
-                        // FIXED: Correct React-style event listener
-                        onPointerDown={() => {
-                            console.log("Clicked Actor:", actor.id);
-                            onInteract('actor', actor);
-                        }}
-                    />
+                        label={`actor_${actor.id}`}
+                    >
+                        {/* THE CHARACTER SPRITE (Static drawFn reference, no lag) */}
+                        <pixiGraphics
+                            draw={drawFn}
+                            eventMode="static"
+                            cursor="pointer"
+                            hitArea={new Rectangle(0, 0, 32, 48)}
+                            onPointerDown={() => onInteract('actor', actor)}
+                        />
+                        
+                    {/* The Debug Highlight - Moved INSIDE the container */}
+                    {debugMode && isKiller && (
+                        <pixiGraphics 
+                            draw={drawDebugBox} 
+                            zIndex={9999} // Ensure it's on top of the character
+                        />
+                        )}
+                    </pixiContainer>
                 );
             })}
         </pixiContainer>

@@ -1,51 +1,37 @@
-// --- FILE: systems/gameplay/CrisisSystem.ts ---
-
-import { GameSystem, GameContext } from '@/types/GameContext';
 import { Entity } from '@/utils/WorldGenerator';
-import { SoundSynth } from '@/utils/SoundSynth';
+import { GameContext } from '@/types/GameContext';
 
-export const CrisisSystem: GameSystem = {
+export const CrisisSystem = {
     process: (entity: Entity, ctx: GameContext): boolean => {
+        // Only active during the crisis
         if (ctx.gameState !== 'SCENARIO_ACTIVE') return false;
 
-        // --- BOMB SCENARIO ---
-        if (ctx.activeScenario === 'BOMB' && entity.type === 'device_part') {
-            SoundSynth.playClick();
-            
-            // Remove Part
-            ctx.setDecals(prev => prev.filter(d => d.id !== entity.id));
-            
-            // Update Progress
-            const newProgress = ctx.scenarioState.progress + 1;
-            ctx.setScenarioState(prev => ({ ...prev, progress: newProgress }));
-
-            if (newProgress >= 3) {
-                ctx.store.postFeed('SYSTEM', "DEVICE NEUTRALIZED.", 'SUCCESS');
-                ctx.store.completeLevel(true);
-            }
-            return true;
+        // BOMB LOGIC
+        if (entity.textureKey === 'prop_bomb') {
+            // Open the Wire Cutting UI
+            ctx.store.setCrisisInteraction(entity.id);
+            return true; // Handled
         }
 
-        // --- POISON SCENARIO ---
-        if (ctx.activeScenario === 'POISON') {
-            // Check if clicked actor is infected
-            if (ctx.scenarioState.infectedIds.includes(entity.id)) {
-                SoundSynth.playReveal();
-                
-                // Cure Actor
-                ctx.setScenarioState(prev => ({
-                    ...prev,
-                    infectedIds: prev.infectedIds.filter(id => id !== entity.id),
-                    progress: prev.progress + 1
-                }));
+        // POISON LOGIC (Immediate Interaction)
+        if (entity.textureKey.startsWith('prop_bottle')) {
+            // Check if this bottle matches the solution color
+            // Visuals: Variant 0=Red, 1=Blue, 2=Green
+            // Solution: 'RED', 'BLUE', 'GREEN'
+            
+            const variant = parseInt(entity.textureKey.split('_')[2]) || 0;
+            const colors = ['RED', 'BLUE', 'GREEN'];
+            const clickedColor = colors[variant];
+            const correctColor = ctx.store.crisisSolution;
 
-                const newProgress = ctx.scenarioState.progress + 1;
-                if (newProgress >= 3) {
-                    ctx.store.postFeed('SYSTEM', "TARGETS CLEARED.", 'SUCCESS');
-                    ctx.store.completeLevel(true);
-                }
-                return true;
+            if (clickedColor === correctColor) {
+                ctx.store.postFeed('SYSTEM', 'ANTIDOTE ADMINISTERED. TARGET STABILIZED.', 'ANALYSIS');
+                ctx.store.resolveCrisis(true);
+            } else {
+                ctx.store.postFeed('ERROR', 'WRONG ANTIDOTE! TOXIN ACCELERATING.', 'ERROR');
+                ctx.store.failScenario(3);
             }
+            return true;
         }
 
         return false;
