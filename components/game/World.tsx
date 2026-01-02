@@ -13,6 +13,7 @@ import { propPainters } from "@/utils/PropPainters";
 import { routeInteraction } from "@/systems/gameplay/InteractionRouter";
 import { GameContext } from "@/types/GameContext";
 import { rng } from "@/utils/rng";
+import { getKillerProfile } from "@/data/KillerRegistry";
 
 extend({ Container, Graphics, Sprite, Text, TilingSprite });
 
@@ -42,14 +43,40 @@ export const World = () => {
     setDecals(worldData.newDecals);
   }, [level, setKillerArchetype]);
 
-  // 2. Handle Killer Events
+  // 2. Handle Killer Events + WITNESS RADIUS (Force Multiplier)
   useEffect(() => {
     if (pendingVignetteSpawn && layout) {
       const { vignetteId } = pendingVignetteSpawn;
       const dangerZone = rng.pick(layout.spawns.danger);
+      
       if (dangerZone) {
+        // A. Spawn the Crime Scene
         const newCrimeDecals = spawnVignette(vignetteId, dangerZone.x, dangerZone.y);
         setDecals(prev => [...prev, ...newCrimeDecals]);
+
+        // B. THE WITNESS RADIUS CHECK
+        const killerProfile = getKillerProfile(useGameStore.getState().killerArchetype);
+        const WITNESS_RADIUS = 250; // Pixels
+
+        setActors(prevActors => prevActors.map(actor => {
+            // Calculate distance to the crime
+            const dist = Math.hypot(actor.x - dangerZone.x, actor.y - dangerZone.y);
+            
+            if (dist < WITNESS_RADIUS && actor.type !== 'killer') {
+                // This NPC is now a Witness!
+                return {
+                    ...actor,
+                    witnessMemory: {
+                        sawKiller: true,
+                        traitObserved: rng.pick(killerProfile.visualTraits),
+                        locationName: dangerZone.type || "the shadows", // dangerZone has a 'type' property in CityGen
+                        timestamp: Date.now()
+                    }
+                };
+            }
+            return actor;
+        }));
+
         clearVignetteSpawn();
       }
     }

@@ -51,6 +51,13 @@ export interface Entity {
   targetY?: number;
   waitTimer?: number;
   quality?: VignetteType;
+  // NEW: The memory of what this NPC saw
+  witnessMemory?: {
+      sawKiller: boolean;
+      traitObserved: string;
+      locationName: string; // e.g., "near the fountain"
+      timestamp: number;
+  };
 }
 
 // Master Roster (Unchanged)

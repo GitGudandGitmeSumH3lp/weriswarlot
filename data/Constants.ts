@@ -3,8 +3,8 @@
 export const TILE_SIZE = 50;
 export const WORLD_WIDTH = 800;
 export const WORLD_HEIGHT = 600;
-export const COLS = 16;
-export const ROWS = 12;
+export const COLS = 25; // 800px / 32 = 25
+export const ROWS = 19; // 600px / 32 = ~18.75
 
 export enum TileType {
   STREET = 0,
@@ -14,6 +14,9 @@ export enum TileType {
   WATER = 6,
   DENSE_FOLIAGE = 7
 }
+// --- NEW: Killer Heat Thresholds ---
+export const HEAT_THRESHOLD_NERVOUS = 30; // Civilians walk faster, wait less
+export const HEAT_THRESHOLD_PANIC = 70;  // Civilians flee to map edges
 
 export const PALETTE = {
     GRASS_BASE: 0x3a5a40, GRASS_HIGHLIGHT: 0x588157,

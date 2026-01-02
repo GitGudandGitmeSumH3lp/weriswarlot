@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useCallback } from 'react';
-import { Container, Graphics } from 'pixi.js'; 
+import { Container, Graphics, Rectangle } from 'pixi.js'; 
 import { useTick } from '@pixi/react';
 import { getPropDef } from '@/data/PropRegistry';
 import { TILE_SIZE, TileType } from '@/data/Constants';
@@ -98,8 +98,12 @@ export const SceneLayer = ({
                         zIndex={item.zIndex}
                         eventMode={item.kind === 'decal' ? 'static' : 'none'}
                         cursor={item.kind === 'decal' ? 'pointer' : 'default'}
-                        // @ts-ignore
-                        onpointerdown={() => onInteract('decal', item)}
+                        // FIXED: Correct event name and added hitArea for decals
+                        hitArea={new Rectangle(-16, -16, 32, 32)}
+                        onPointerDown={() => {
+                            console.log("Clicked Decal:", item.textureKey);
+                            onInteract('decal', item);
+                        }}
                     />
                 );
             })}
@@ -118,8 +122,14 @@ export const SceneLayer = ({
                         zIndex={actor.y}
                         eventMode="static"
                         cursor="pointer"
-                        // @ts-ignore
-                        onpointerdown={() => onInteract('actor', actor)}
+                        // FIXED: Standardize clickable area (Character is approx 32x48)
+                        // Offset the hitArea to match where the character is drawn
+                        hitArea={new Rectangle(0, 0, 32, 48)} 
+                        // FIXED: Correct React-style event listener
+                        onPointerDown={() => {
+                            console.log("Clicked Actor:", actor.id);
+                            onInteract('actor', actor);
+                        }}
                     />
                 );
             })}

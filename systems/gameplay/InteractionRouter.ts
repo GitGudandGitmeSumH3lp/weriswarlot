@@ -1,23 +1,25 @@
-// --- FILE: systems/gameplay/InteractionRouter.ts ---
+// FILE: systems/gameplay/InteractionRouter.ts
 
 import { Entity } from '@/utils/WorldGenerator';
 import { GameContext } from '@/types/GameContext';
-import { CrisisSystem } from './CrisisSystem';
 import { EvidenceSystem } from './EvidenceSystem';
-import { DialogueSystem } from './DialogueSystem';
-
-// Priority Order: Crisis > Dialogue > Evidence
-const SYSTEMS = [CrisisSystem, DialogueSystem, EvidenceSystem];
+// CrisisSystem placeholder removed for now
 
 export const routeInteraction = (entity: Entity, ctx: GameContext) => {
-    for (const system of SYSTEMS) {
-        const handled = system.process(entity, ctx);
-        if (handled) return; 
+    
+    // 1. PRIORITY: CRISIS (Pending)
+    if (entity.type === 'civilian' || entity.type === 'killer' || entity.id.startsWith('actor_')) {
+        ctx.store.startInterrogation(entity);
+        return; 
     }
 
-    // Fallback: Flavor Text
-    if (ctx.gameState === 'PLAYING') {
-        const name = entity.textureKey || entity.type;
-        ctx.store.postFeed('SYSTEM', `Just a ${name.replace('_', ' ')}. Nothing useful.`, 'INFO');
+    // 2. PRIORITY: DIALOGUE / INTERROGATION
+    if (entity.type === 'civilian' || entity.type === 'killer') {
+        // Trigger the UI Overlay
+        ctx.store.startInterrogation(entity);
+        return; // Stop propagation
     }
+
+    // 3. PRIORITY: EVIDENCE
+    EvidenceSystem.process(entity, ctx);
 };

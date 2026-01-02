@@ -1,5 +1,5 @@
 // --- FILE: components/ui/GameHUD.tsx ---
-
+import { InterrogationOverlay } from './InterrogationOverlay'; 
 import React, { useState } from 'react';
 import { useGameStore, EvidenceItem } from '@/store/gameStore';
 
@@ -193,10 +193,15 @@ const StartScreen = () => {
 };
 
 export const GameHUD = () => {
-    const gameState = useGameStore(s => s.gameState);
+    const { gameState, isInterrogating } = useGameStore(s => ({ 
+        gameState: s.gameState, 
+        isInterrogating: s.isInterrogating 
+    }));
+
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-20">
             {gameState === 'IDLE' && <StartScreen />}
+            
             {(gameState === 'PLAYING' || gameState === 'SCENARIO_ACTIVE') && (
                 <>
                     <ProbabilityMeter />
@@ -204,6 +209,10 @@ export const GameHUD = () => {
                     <ActionPanel />
                 </>
             )}
+            
+            {/* Show Overlay if state is active */}
+            {isInterrogating && <InterrogationOverlay />}
+            
             <FeedLog />
         </div>
     );

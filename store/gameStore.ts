@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { getKillerProfile } from '@/data/KillerRegistry';
 import { rng } from '@/utils/rng';
+import { Entity } from '@/utils/WorldGenerator'; // Import Entity
 
 export type GameState = 'IDLE' | 'PLAYING' | 'FOUND' | 'CONFRONTATION' | 'SCENARIO_ACTIVE' | 'GAME_OVER' | 'LEVEL_COMPLETE';
 export type ScenarioType = 'BOMB' | 'EVIDENCE' | 'POISON' | 'ACCOMPLICE';
@@ -42,7 +43,9 @@ interface GameStateData {
   killerActionTimer: number;
   killerHeat: number;
   pendingVignetteSpawn: { vignetteId: string; dangerZone: any } | null; // The event trigger
-
+  // NEW: Interrogation State
+  isInterrogating: boolean;
+  interrogationTarget: Entity | null;
 
   
   // Actions
@@ -63,6 +66,9 @@ interface GameStateData {
   tickKillerTimer: (cooldown: number) => void; // Accepts cooldown from profile
   clearVignetteSpawn: () => void;
   // No action for heat, it's set internally
+  // NEW: Interrogation Actions
+  startInterrogation: (target: Entity) => void;
+  endInterrogation: () => void;
 }
 
 export const useGameStore = create<GameStateData>((set, get) => ({
@@ -79,6 +85,8 @@ export const useGameStore = create<GameStateData>((set, get) => ({
   killerActionTimer: 60, // Initial delay before first action
   killerHeat: 0,
   pendingVignetteSpawn: null,
+  isInterrogating: false,
+  interrogationTarget: null,
 
   // Update startGame to reset killer state
   startGame: () => {
@@ -107,6 +115,17 @@ export const useGameStore = create<GameStateData>((set, get) => ({
        return { scenarioTimer: state.scenarioTimer - 1 };
     }
     return {};
+  }),
+
+  startInterrogation: (target) => set({ 
+      isInterrogating: true, 
+      interrogationTarget: target,
+      // Pause game/killer timer logic could go here if we wanted "Time Freeze"
+  }),
+
+  endInterrogation: () => set({ 
+      isInterrogating: false, 
+      interrogationTarget: null 
   }),
 
   // --- UPDATED LOGIC ---
