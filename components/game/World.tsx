@@ -39,39 +39,55 @@ export const World = () => {
   useEffect(() => {
     const cityLayout = generateCity();
     const worldData = generateWorldData(level, cityLayout, setKillerArchetype);
-    
+
+    // Fetch the profile for the CURRENT killer archetype
+    const currentKillerArchetype = useGameStore.getState().killerArchetype;
+    const profile = getKillerProfile(currentKillerArchetype);
+  
+    // Map through the actors to find the killer and inject traits
+    const actorsWithTraits = worldData.newActors.map(actor => {
+        if (actor.type === 'killer') {
+            return {
+                ...actor,
+                // Assign the visual traits defined in the KillerRegistry
+                activeTraits: profile.inspectableTraits 
+            };
+        }
+        return actor;
+    });
+
     setLayout(cityLayout);
-    setActors(worldData.newActors);
+    setActors(actorsWithTraits);
     setDecals(worldData.newDecals);
   }, [level, setKillerArchetype]);
 
-  // 2. Handle Killer Events + WITNESS RADIUS (Force Multiplier)
+  // 2. Handle Killer Events + WITNESS RADIUS
   useEffect(() => {
     if (pendingVignetteSpawn && layout) {
       const { vignetteId } = pendingVignetteSpawn;
       const dangerZone = rng.pick(layout.spawns.danger);
       
       if (dangerZone) {
-        // A. Spawn the Crime Scene
         const newCrimeDecals = spawnVignette(vignetteId, dangerZone.x, dangerZone.y);
         setDecals(prev => [...prev, ...newCrimeDecals]);
 
-        // B. THE WITNESS RADIUS CHECK
         const killerProfile = getKillerProfile(useGameStore.getState().killerArchetype);
-        const WITNESS_RADIUS = 250; // Pixels
+        const WITNESS_RADIUS = 250; 
 
         setActors(prevActors => prevActors.map(actor => {
-            // Calculate distance to the crime
             const dist = Math.hypot(actor.x - dangerZone.x, actor.y - dangerZone.y);
             
             if (dist < WITNESS_RADIUS && actor.type !== 'killer') {
-                // This NPC is now a Witness!
+                // FIXED: Use 'inspectableTraits' instead of 'visualTraits'
+                // We pick a random trait and use its '.name' for the memory string
+                const randomTrait = rng.pick(killerProfile.inspectableTraits);
+                
                 return {
                     ...actor,
                     witnessMemory: {
                         sawKiller: true,
-                        traitObserved: rng.pick(killerProfile.visualTraits),
-                        locationName: dangerZone.type || "the shadows", // dangerZone has a 'type' property in CityGen
+                        traitObserved: randomTrait ? randomTrait.name : "something suspicious",
+                        locationName: dangerZone.type || "the shadows",
                         timestamp: Date.now()
                     }
                 };

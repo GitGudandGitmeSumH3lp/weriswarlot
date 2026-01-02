@@ -4,6 +4,8 @@ import { Container, Graphics } from 'pixi.js';
 import { useGameStore } from '@/store/gameStore';
 import { painters } from '@/utils/CharacterPainters';
 import { getRumorText } from '@/data/RumorRegistry';
+import { detailPainters } from '@/utils/DetailPainters';
+import { InspectionLayer } from './InspectionLayer'; 
 
 // Register Pixi components for the mini-app
 extend({ Container, Graphics });
@@ -25,20 +27,24 @@ const MugshotRenderer = ({ target }: { target: any }) => {
         const paintFn = painters[baseKey];
 
         if (paintFn) {
-            // FIXED: Centering logic for 4x scale
-            // Character is ~32px wide (scaled to 128px)
-            // Character is ~48px tall (scaled to 192px)
             g.scale.set(4); 
-            
-            // X: (CanvasWidth / 2) - (ScaledWidth / 2) - (InternalPainterOffset * Scale)
-            // Most painters have a ~10px gap on the left
             g.x = 35; 
-            
-            // Y: (CanvasHeight / 2) - (ScaledHeight / 2)
-            // (200 / 2) - (192 / 2) = 4px padding top/bottom
             g.y = 5; 
-
             paintFn(g, variant);
+
+            // --- NEW: DRAW ACTIVE TRAITS ---
+            if (target.activeTraits && target.activeTraits.length > 0) {
+                target.activeTraits.forEach((trait: any) => {
+                    // Look up the detail painter (e.g., 'blood_hands')
+                    // @ts-ignore
+                    const detailFn = detailPainters[trait.painterKey];
+                    if (detailFn) {
+                        // Draw the detail on top of the base character
+                        detailFn(g);
+                    }
+                });
+            }
+            
             pixiApp.stage.addChild(g);
         }
 
@@ -74,6 +80,8 @@ export const InterrogationOverlay = () => {
                     <Application width={200} height={200} backgroundAlpha={0}>
                         <MugshotRenderer target={interrogationTarget} />
                     </Application>
+                    {/* NEW: Place the click layer directly over the canvas */}
+                    <InspectionLayer />
                     
                     <div className="mt-2 text-xs font-mono text-slate-400 uppercase tracking-widest">
                         Subject #{interrogationTarget.id.split('_')[1]}
